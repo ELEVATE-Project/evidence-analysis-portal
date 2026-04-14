@@ -1,11 +1,13 @@
+import { ENV } from '../config/env';
+
 const STORAGE_KEYS = {
-  token: 'token',
-  user: 'user',
-  expiresAt: 'token_expires_at',
-  rememberMe: 'remember_me',
+  token: ENV.AUTH_TOKEN_STORAGE_KEY,
+  user: ENV.AUTH_USER_STORAGE_KEY,
+  expiresAt: ENV.AUTH_EXPIRES_AT_STORAGE_KEY,
+  rememberMe: ENV.AUTH_REMEMBER_ME_STORAGE_KEY,
 };
 
-const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+const REFRESH_BUFFER_MS = ENV.AUTH_REFRESH_BUFFER_MS;
 
 const readSessionFromStorage = (storage, rememberMe) => {
   const token = storage.getItem(STORAGE_KEYS.token);
@@ -93,7 +95,7 @@ export const resolveExpiresAt = (tokenData) => {
     }
   }
 
-  return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  return new Date(Date.now() + ENV.AUTH_FALLBACK_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
 };
 
 export const isNearExpiry = (expiresAt, bufferMs = REFRESH_BUFFER_MS) => {

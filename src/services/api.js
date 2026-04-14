@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getAccessToken, clearStoredSession } from './authStorage';
+import { ENV } from '../config/env';
 
 let refreshHandler = null;
 let logoutHandler = null;
@@ -11,7 +12,7 @@ export const registerAuthHandlers = ({ onRefresh, onLogout }) => {
 };
 
 const apiClient = axios.create({
-  baseURL: '/api/v1',
+  baseURL: ENV.API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },

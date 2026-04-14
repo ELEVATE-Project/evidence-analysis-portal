@@ -20,12 +20,12 @@ React frontend SPA for the Evidence Analysis System.
    npm install
    ```
 
-3. **Configure environment variables** (optional):
+3. **Configure environment variables**:
    ```bash
-   cp .env.example .env  # If you have a template
+   cp .env.example .env
    ```
-   
-   Default configuration proxies API requests to `http://localhost:8000`. Customize as needed.
+
+   All portal configuration is env-driven. Update `.env` values as needed.
 
 4. **Run development server**:
    ```bash
@@ -34,7 +34,7 @@ React frontend SPA for the Evidence Analysis System.
    
    The frontend will be available at `http://localhost:5173`
    
-   API requests to `/api/*` are automatically proxied to the backend.
+   API requests are proxied based on `APPLICATION_BASE_URL` and `API_ENDPOINT`.
 
 5. **Build for production**:
    ```bash

@@ -14,3 +14,6 @@ dist-ssr
 *.sln
 *.sw?
 .eslint*
+.env
+.env.*
+!.env.example
