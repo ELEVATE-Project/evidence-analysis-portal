@@ -7,22 +7,36 @@ import {
   Typography,
   Box,
   Alert,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
 
+  const usernameError = submitted && !username.trim() ? 'Username is required' : '';
+  const passwordError = submitted && !password ? 'Password is required' : '';
+  const isFormValid = Boolean(username.trim() && password);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitted(true);
     setError('');
+
+    if (!isFormValid) {
+      return;
+    }
+
     setLoading(true);
 
-    const result = await login(username, password);
+    const result = await login(username.trim(), password, rememberMe);
     
     if (!result.success) {
       setError(result.error);
@@ -67,6 +81,8 @@ const Login = () => {
               autoFocus
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              error={Boolean(usernameError)}
+              helperText={usernameError}
             />
             <TextField
               margin="normal"
@@ -79,13 +95,25 @@ const Login = () => {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              error={Boolean(passwordError)}
+              helperText={passwordError}
+            />
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  color="primary"
+                />
+              )}
+              label="Remember me"
             />
             <Button
               type="submit"
               fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
-              disabled={loading}
+              disabled={loading || !isFormValid}
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
