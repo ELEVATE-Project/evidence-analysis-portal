@@ -14,7 +14,7 @@ export const executionService = {
   // Get execution list
   getExecutions: async (page = 1, pageSize = 20, status = null) => {
     const params = { page, page_size: pageSize };
-    if (status) params.status = status;
+    if (status) params.status_filter = status;
     
     const response = await apiClient.get('/executions/', { params });
     return response.data;

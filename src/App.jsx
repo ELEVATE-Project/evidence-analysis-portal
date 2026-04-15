@@ -1,7 +1,5 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 
 // Context
 import { AuthProvider } from './context/AuthContext';
@@ -13,61 +11,42 @@ import ExecutionList from './pages/ExecutionList';
 import ExecutionCreate from './pages/ExecutionCreate';
 import ExecutionDetail from './pages/ExecutionDetail';
 import ReportView from './pages/ReportView';
+import ReportsList from './pages/ReportsList';
 import InteractiveTesting from './pages/InteractiveTesting';
 
 // Components
 import PrivateRoute from './components/PrivateRoute';
 import Layout from './components/Layout';
 
-// Theme
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-    background: {
-      default: '#f5f5f5',
-    },
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-  },
-});
-
 function App() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            
-            <Route
-              path="/*"
-              element={
-                <PrivateRoute>
-                  <Layout>
-                    <Routes>
-                      <Route path="/" element={<Dashboard />} />
-                      <Route path="/executions" element={<ExecutionList />} />
-                      <Route path="/executions/create" element={<ExecutionCreate />} />
-                      <Route path="/executions/:id" element={<ExecutionDetail />} />
-                      <Route path="/reports/:id" element={<ReportView />} />
-                      <Route path="/testing" element={<InteractiveTesting />} />
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                  </Layout>
-                </PrivateRoute>
-              }
-            />
-          </Routes>
-        </AuthProvider>
-      </Router>
-    </ThemeProvider>
+    <Router>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+
+          <Route
+            path="/*"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/executions" element={<ExecutionList />} />
+                    <Route path="/executions/create" element={<ExecutionCreate />} />
+                    <Route path="/executions/:id" element={<ExecutionDetail />} />
+                    <Route path="/reports" element={<ReportsList />} />
+                    <Route path="/reports/:id" element={<ReportView />} />
+                    <Route path="/testing" element={<InteractiveTesting />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
+    </Router>
   );
 }
 

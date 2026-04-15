@@ -1,84 +1,399 @@
-import React from 'react';
-import {
-  Container,
-  Grid,
-  Paper,
-  Typography,
-  Box,
-  Card,
-  CardContent,
-  CardActions,
-  Button,
-} from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import AddCircleIcon from '@mui/icons-material/AddCircle';
-import ListAltIcon from '@mui/icons-material/ListAlt';
-import ScienceIcon from '@mui/icons-material/Science';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  CheckCircle2,
+  Eye,
+  FileText,
+  Filter,
+  PlayCircle,
+  RefreshCw,
+} from 'lucide-react';
+import { executionService } from '../services/executionService';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'failed', label: 'Failed' },
+];
 
 const Dashboard = () => {
   const navigate = useNavigate();
 
-  const cards = [
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [analyses, setAnalyses] = useState([]);
+  const [filters, setFilters] = useState({
+    status: 'all',
+    state: 'all',
+    district: 'all',
+  });
+
+  const loadAnalyses = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await executionService.getExecutions(1, 250);
+      setAnalyses(Array.isArray(response?.items) ? response.items : []);
+    } catch (requestError) {
+      setError(requestError?.response?.data?.detail || 'Unable to load analyses right now.');
+      setAnalyses([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadAnalyses();
+  }, []);
+
+  const stateOptions = useMemo(() => {
+    const uniqueStates = [...new Set(analyses.map((analysis) => analysis.state).filter(Boolean))];
+    return uniqueStates.sort((a, b) => a.localeCompare(b));
+  }, [analyses]);
+
+  const districtOptions = useMemo(() => {
+    const scopedAnalyses =
+      filters.state === 'all'
+        ? analyses
+        : analyses.filter((analysis) => analysis.state === filters.state);
+
+    const uniqueDistricts = [...new Set(scopedAnalyses.map((analysis) => analysis.district).filter(Boolean))];
+    return uniqueDistricts.sort((a, b) => a.localeCompare(b));
+  }, [analyses, filters.state]);
+
+  const filteredAnalyses = useMemo(() => {
+    return analyses
+      .filter((analysis) => {
+        const statusMatch =
+          filters.status === 'all' || getAnalysisStatusGroup(analysis.status) === filters.status;
+        const stateMatch = filters.state === 'all' || analysis.state === filters.state;
+        const districtMatch = filters.district === 'all' || analysis.district === filters.district;
+
+        return statusMatch && stateMatch && districtMatch;
+      })
+      .sort((first, second) => new Date(second.created_at) - new Date(first.created_at));
+  }, [analyses, filters]);
+
+  const recentAnalyses = useMemo(() => filteredAnalyses.slice(0, 10), [filteredAnalyses]);
+
+  const metrics = useMemo(() => {
+    const total = analyses.length;
+    const completed = analyses.filter((analysis) => getAnalysisStatusGroup(analysis.status) === 'completed').length;
+    const inProgress = analyses.filter((analysis) => getAnalysisStatusGroup(analysis.status) === 'in_progress').length;
+    const failed = analyses.filter((analysis) => getAnalysisStatusGroup(analysis.status) === 'failed').length;
+
+    return { total, completed, inProgress, failed };
+  }, [analyses]);
+
+  const summaryCards = [
     {
-      title: 'Create Execution',
-      description: 'Start a new evidence analysis execution',
-      icon: <AddCircleIcon sx={{ fontSize: 60, color: 'primary.main' }} />,
-      action: () => navigate('/executions/create'),
-      buttonText: 'Create New',
+      title: 'Total Analyses',
+      value: metrics.total,
+      icon: BarChart3,
+      accentClass: 'text-blue-600 bg-blue-50 border-blue-100',
+      progress: 100,
     },
     {
-      title: 'View Executions',
-      description: 'Browse and manage your executions',
-      icon: <ListAltIcon sx={{ fontSize: 60, color: 'primary.main' }} />,
-      action: () => navigate('/executions'),
-      buttonText: 'View All',
+      title: 'Completed Analyses',
+      value: metrics.completed,
+      icon: CheckCircle2,
+      accentClass: 'text-emerald-600 bg-emerald-50 border-emerald-100',
+      progress: metrics.total ? (metrics.completed / metrics.total) * 100 : 0,
     },
     {
-      title: 'Interactive Testing',
-      description: 'Test evidence validation interactively',
-      icon: <ScienceIcon sx={{ fontSize: 60, color: 'primary.main' }} />,
-      action: () => navigate('/testing'),
-      buttonText: 'Start Testing',
+      title: 'In Progress',
+      value: metrics.inProgress,
+      icon: Activity,
+      accentClass: 'text-amber-600 bg-amber-50 border-amber-100',
+      progress: metrics.total ? (metrics.inProgress / metrics.total) * 100 : 0,
+    },
+    {
+      title: 'Failed',
+      value: metrics.failed,
+      icon: AlertTriangle,
+      accentClass: 'text-rose-600 bg-rose-50 border-rose-100',
+      progress: metrics.total ? (metrics.failed / metrics.total) * 100 : 0,
     },
   ];
 
-  return (
-    <Container maxWidth="lg">
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Dashboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Welcome to the Evidence Analysis System
-        </Typography>
-      </Box>
+  const handleFilterChange = (event) => {
+    const { name, value } = event.target;
 
-      <Grid container spacing={3}>
-        {cards.map((card, index) => (
-          <Grid item xs={12} md={4} key={index}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                <Box sx={{ mb: 2 }}>
-                  {card.icon}
-                </Box>
-                <Typography variant="h6" gutterBottom>
-                  {card.title}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {card.description}
-                </Typography>
+    setFilters((currentFilters) => {
+      if (name === 'state') {
+        return {
+          ...currentFilters,
+          state: value,
+          district: 'all',
+        };
+      }
+
+      return {
+        ...currentFilters,
+        [name]: value,
+      };
+    });
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      status: 'all',
+      state: 'all',
+      district: 'all',
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-800">Dashboard</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Track your analysis activity, monitor outcomes, and take quick action from one place.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                onClick={() => navigate('/executions')}
+              >
+                View Analyses
+              </Button>
+              <Button
+                type="button"
+                className="bg-blue-600 text-white hover:bg-blue-700"
+                onClick={() => navigate('/executions/create')}
+              >
+                <PlayCircle className="mr-2 h-4 w-4" />
+                Start Analysis Run
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+
+          return (
+            <Card
+              key={card.title}
+              className="border-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{card.title}</p>
+                    <p className="mt-2 text-3xl font-semibold text-slate-800">{card.value}</p>
+                  </div>
+                  <div className={`rounded-md border p-2 ${card.accentClass}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                </div>
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.max(0, card.progress))}%` }}
+                  />
+                </div>
               </CardContent>
-              <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
-                <Button variant="contained" onClick={card.action}>
-                  {card.buttonText}
-                </Button>
-              </CardActions>
             </Card>
-          </Grid>
-        ))}
-      </Grid>
-    </Container>
+          );
+        })}
+      </section>
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
+            <Filter className="h-4 w-4 text-blue-600" />
+            Filter Analyses
+          </CardTitle>
+          <CardDescription>Refine dashboard data by status, state, and district.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+            <label className="space-y-1 text-sm text-slate-700">
+              <span className="font-medium">Status</span>
+              <select
+                name="status"
+                value={filters.status}
+                onChange={handleFilterChange}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+              >
+                {STATUS_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1 text-sm text-slate-700">
+              <span className="font-medium">State</span>
+              <select
+                name="state"
+                value={filters.state}
+                onChange={handleFilterChange}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="all">All States</option>
+                {stateOptions.map((stateOption) => (
+                  <option key={stateOption} value={stateOption}>
+                    {stateOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1 text-sm text-slate-700">
+              <span className="font-medium">District</span>
+              <select
+                name="district"
+                value={filters.district}
+                onChange={handleFilterChange}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="all">All Districts</option>
+                {districtOptions.map((districtOption) => (
+                  <option key={districtOption} value={districtOption}>
+                    {districtOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 w-full border-slate-300 text-slate-700 hover:bg-slate-100"
+                onClick={clearFilters}
+              >
+                Clear Filters
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-lg text-slate-800">Recent Analyses</CardTitle>
+              <CardDescription>Showing up to 10 latest analysis runs based on active filters.</CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 border-slate-300 text-slate-700 hover:bg-slate-100"
+              onClick={() => void loadAnalyses()}
+              disabled={loading}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-12 animate-pulse rounded-md bg-slate-100" />
+              ))}
+            </div>
+          ) : recentAnalyses.length === 0 ? (
+            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+              <p className="text-sm font-medium text-slate-700">No analyses found for selected filters.</p>
+              <p className="mt-1 text-xs text-slate-500">Try changing filters or start a new analysis run.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-2 py-3 font-semibold">Name</th>
+                    <th className="px-2 py-3 font-semibold">State / District</th>
+                    <th className="px-2 py-3 font-semibold">Status</th>
+                    <th className="px-2 py-3 font-semibold">Created Date</th>
+                    <th className="px-2 py-3 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recentAnalyses.map((analysis) => {
+                    const statusMeta = getAnalysisStatusMeta(analysis.status);
+
+                    return (
+                      <tr
+                        key={analysis.id}
+                        className="transition-colors duration-150 hover:bg-slate-50"
+                      >
+                        <td className="px-2 py-3 text-sm font-medium text-slate-800">{analysis.name}</td>
+                        <td className="px-2 py-3 text-sm text-slate-600">
+                          {[analysis.state, analysis.district].filter(Boolean).join(' / ') || '-'}
+                        </td>
+                        <td className="px-2 py-3 text-sm">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${statusMeta.badgeClass}`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} />
+                            {statusMeta.label}
+                          </span>
+                        </td>
+                        <td className="px-2 py-3 text-sm text-slate-600">{formatDateTime(analysis.created_at)}</td>
+                        <td className="px-2 py-3">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-8 border-slate-300 px-3 text-xs text-slate-700 hover:bg-slate-100"
+                              onClick={() => navigate(`/executions/${analysis.id}`)}
+                            >
+                              <Eye className="mr-1.5 h-3.5 w-3.5" />
+                              View
+                            </Button>
+
+                            {getAnalysisStatusGroup(analysis.status) === 'completed' && (
+                              <Button
+                                type="button"
+                                className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
+                                onClick={() => navigate(`/reports/${analysis.id}`)}
+                              >
+                                <FileText className="mr-1.5 h-3.5 w-3.5" />
+                                View Report
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 
