@@ -1,5 +1,80 @@
 import apiClient from './api';
 
+const ENTITY_ID_KEYS = ['id', '_id', 'value', 'entityId', 'stateId', 'districtId', 'code', 'externalId'];
+const ENTITY_NAME_KEYS = ['name', 'label', 'title', 'entityName', 'state_name', 'district_name', 'value'];
+
+const pickFirstString = (objectValue, keys) => {
+  for (const key of keys) {
+    const value = objectValue?.[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+    if (typeof value === 'number') {
+      return String(value);
+    }
+  }
+  return '';
+};
+
+const normalizeEntityItem = (item, index) => {
+  if (typeof item === 'string' || typeof item === 'number') {
+    const rawValue = String(item).trim();
+    return {
+      id: rawValue || `entity-${index}`,
+      name: rawValue || `Entity ${index + 1}`,
+      raw: item,
+    };
+  }
+
+  if (!item || typeof item !== 'object') {
+    return {
+      id: `entity-${index}`,
+      name: `Entity ${index + 1}`,
+      raw: item,
+    };
+  }
+
+  const name = pickFirstString(item, ENTITY_NAME_KEYS);
+  const id = pickFirstString(item, ENTITY_ID_KEYS) || name || `entity-${index}`;
+
+  return {
+    id,
+    name: name || id,
+    raw: item,
+  };
+};
+
+const parseEntityResponse = (responseData, entityLabel) => {
+  if (responseData?.success === false) {
+    const details = responseData?.error?.details;
+    const code = responseData?.error?.code;
+    const serverMessage = responseData?.message || `Failed to fetch ${entityLabel}.`;
+    const detailMessage = typeof details === 'string' ? details : '';
+    throw new Error([serverMessage, code, detailMessage].filter(Boolean).join(' - '));
+  }
+
+  const items = Array.isArray(responseData?.data) ? responseData.data : [];
+  return items.map((item, index) => normalizeEntityItem(item, index));
+};
+
+export const getApiErrorMessage = (error, fallbackMessage = 'Request failed.') => {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail.trim();
+  }
+
+  const message = error?.response?.data?.message;
+  if (typeof message === 'string' && message.trim()) {
+    return message.trim();
+  }
+
+  if (typeof error?.message === 'string' && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return fallbackMessage;
+};
+
 export const executionService = {
   // Create new execution
   createExecution: async (formData) => {
@@ -35,6 +110,20 @@ export const executionService = {
   // Delete execution
   deleteExecution: async (executionId) => {
     await apiClient.delete(`/executions/${executionId}`);
+  },
+};
+
+export const entityService = {
+  getStates: async () => {
+    const response = await apiClient.get('/states');
+    return parseEntityResponse(response.data, 'states');
+  },
+
+  getDistricts: async (stateId) => {
+    const response = await apiClient.get('/districts', {
+      params: { stateId },
+    });
+    return parseEntityResponse(response.data, 'districts');
   },
 };
 

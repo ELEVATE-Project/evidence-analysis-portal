@@ -11,7 +11,7 @@ import {
   PlayCircle,
   RefreshCw,
 } from 'lucide-react';
-import { executionService } from '../services/executionService';
+import { entityService, executionService, getApiErrorMessage } from '../services/executionService';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
@@ -23,17 +23,64 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'failed', label: 'Failed' },
 ];
 
+const toSortedUniqueOptions = (values) => {
+  const normalizedValues = values
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean);
+
+  return [...new Set(normalizedValues)].sort((first, second) => first.localeCompare(second));
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [analyses, setAnalyses] = useState([]);
+
+  const [states, setStates] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [statesLoading, setStatesLoading] = useState(false);
+  const [districtsLoading, setDistrictsLoading] = useState(false);
+  const [stateError, setStateError] = useState('');
+  const [districtError, setDistrictError] = useState('');
+
   const [filters, setFilters] = useState({
     status: 'all',
     state: 'all',
     district: 'all',
   });
+
+  const analysisStateOptions = useMemo(() => {
+    return toSortedUniqueOptions(analyses.map((analysis) => analysis.state));
+  }, [analyses]);
+
+  const analysisDistrictOptions = useMemo(() => {
+    const scopedAnalyses =
+      filters.state === 'all'
+        ? analyses
+        : analyses.filter((analysis) => analysis.state === filters.state);
+
+    return toSortedUniqueOptions(scopedAnalyses.map((analysis) => analysis.district));
+  }, [analyses, filters.state]);
+
+  const stateNameToIdMap = useMemo(() => {
+    return new Map(
+      states
+        .map((stateItem) => [stateItem?.name, stateItem?.id])
+        .filter(([name, id]) => typeof name === 'string' && name.trim() && id)
+    );
+  }, [states]);
+
+  const stateOptions = useMemo(() => {
+    const entityStateOptions = toSortedUniqueOptions(states.map((stateItem) => stateItem?.name));
+    return entityStateOptions.length > 0 ? entityStateOptions : analysisStateOptions;
+  }, [states, analysisStateOptions]);
+
+  const districtOptions = useMemo(() => {
+    const entityDistrictOptions = toSortedUniqueOptions(districts.map((districtItem) => districtItem?.name));
+    return entityDistrictOptions.length > 0 ? entityDistrictOptions : analysisDistrictOptions;
+  }, [districts, analysisDistrictOptions]);
 
   const loadAnalyses = async () => {
     setLoading(true);
@@ -43,31 +90,74 @@ const Dashboard = () => {
       const response = await executionService.getExecutions(1, 250);
       setAnalyses(Array.isArray(response?.items) ? response.items : []);
     } catch (requestError) {
-      setError(requestError?.response?.data?.detail || 'Unable to load analyses right now.');
+      setError(getApiErrorMessage(requestError, 'Unable to load analyses right now.'));
       setAnalyses([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadStates = async () => {
+    setStatesLoading(true);
+    setStateError('');
+
+    try {
+      const stateItems = await entityService.getStates();
+      setStates(stateItems);
+    } catch (requestError) {
+      setStates([]);
+      setStateError(
+        `${getApiErrorMessage(requestError, 'Unable to load states right now.')} Showing available analysis states when possible.`
+      );
+    } finally {
+      setStatesLoading(false);
+    }
+  };
+
+  const loadDistricts = async (stateId) => {
+    if (!stateId) {
+      setDistricts([]);
+      return;
+    }
+
+    setDistrictsLoading(true);
+    setDistrictError('');
+
+    try {
+      const districtItems = await entityService.getDistricts(stateId);
+      setDistricts(districtItems);
+    } catch (requestError) {
+      setDistricts([]);
+      setDistrictError(
+        `${getApiErrorMessage(requestError, 'Unable to load districts for selected state.')} Showing available analysis districts when possible.`
+      );
+    } finally {
+      setDistrictsLoading(false);
+    }
+  };
+
   useEffect(() => {
     void loadAnalyses();
+    void loadStates();
   }, []);
 
-  const stateOptions = useMemo(() => {
-    const uniqueStates = [...new Set(analyses.map((analysis) => analysis.state).filter(Boolean))];
-    return uniqueStates.sort((a, b) => a.localeCompare(b));
-  }, [analyses]);
+  useEffect(() => {
+    if (filters.state === 'all') {
+      setDistricts([]);
+      setDistrictError('');
+      return;
+    }
 
-  const districtOptions = useMemo(() => {
-    const scopedAnalyses =
-      filters.state === 'all'
-        ? analyses
-        : analyses.filter((analysis) => analysis.state === filters.state);
+    const selectedStateId = stateNameToIdMap.get(filters.state);
 
-    const uniqueDistricts = [...new Set(scopedAnalyses.map((analysis) => analysis.district).filter(Boolean))];
-    return uniqueDistricts.sort((a, b) => a.localeCompare(b));
-  }, [analyses, filters.state]);
+    if (!selectedStateId) {
+      setDistricts([]);
+      setDistrictError('');
+      return;
+    }
+
+    void loadDistricts(selectedStateId);
+  }, [filters.state, stateNameToIdMap]);
 
   const filteredAnalyses = useMemo(() => {
     return analyses
@@ -150,6 +240,8 @@ const Dashboard = () => {
       district: 'all',
     });
   };
+
+  const districtFilterDisabled = filters.state === 'all' || districtsLoading;
 
   return (
     <div className="space-y-6">
@@ -249,13 +341,14 @@ const Dashboard = () => {
                 onChange={handleFilterChange}
                 className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
               >
-                <option value="all">All States</option>
+                <option value="all">{statesLoading ? 'Loading states...' : 'All States'}</option>
                 {stateOptions.map((stateOption) => (
                   <option key={stateOption} value={stateOption}>
                     {stateOption}
                   </option>
                 ))}
               </select>
+              {stateError && <p className="text-xs text-amber-700">{stateError}</p>}
             </label>
 
             <label className="space-y-1 text-sm text-slate-700">
@@ -264,15 +357,23 @@ const Dashboard = () => {
                 name="district"
                 value={filters.district}
                 onChange={handleFilterChange}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                disabled={districtFilterDisabled}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
               >
-                <option value="all">All Districts</option>
+                <option value="all">
+                  {filters.state === 'all'
+                    ? 'Select state first'
+                    : districtsLoading
+                      ? 'Loading districts...'
+                      : 'All Districts'}
+                </option>
                 {districtOptions.map((districtOption) => (
                   <option key={districtOption} value={districtOption}>
                     {districtOption}
                   </option>
                 ))}
               </select>
+              {districtError && <p className="text-xs text-amber-700">{districtError}</p>}
             </label>
 
             <div className="flex items-end">
