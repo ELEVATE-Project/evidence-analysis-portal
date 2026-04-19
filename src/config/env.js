@@ -6,6 +6,14 @@ const getRequiredEnv = (key) => {
   return value;
 };
 
+const getEnvOrDefault = (key, defaultValue) => {
+  const value = import.meta.env[key];
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+  return defaultValue;
+};
+
 const parseNumber = (value, key) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
@@ -28,4 +36,5 @@ export const ENV = {
   AUTH_USER_STORAGE_KEY: getRequiredEnv('APPLICATION_AUTH_USER_STORAGE_KEY'),
   AUTH_EXPIRES_AT_STORAGE_KEY: getRequiredEnv('APPLICATION_AUTH_EXPIRES_AT_STORAGE_KEY'),
   AUTH_REMEMBER_ME_STORAGE_KEY: getRequiredEnv('APPLICATION_AUTH_REMEMBER_ME_STORAGE_KEY'),
+  DEFAULT_CSV_TYPE_ID: getEnvOrDefault('APPLICATION_DEFAULT_CSV_TYPE_ID', 'project_report'),
 };

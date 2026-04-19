@@ -65,18 +65,6 @@ const Login = () => {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          {/* Security Notice */}
-          <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-md flex items-start gap-2">
-            <Shield className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-slate-700 font-medium">
-                Authorized Access Only
-              </p>
-              <p className="text-xs text-slate-600 mt-1">
-                This system is for official government use. All activities are monitored and logged.
-              </p>
-            </div>
-          </div>
 
           {/* Login Card */}
           <Card className="border-slate-200 shadow-md">
@@ -176,7 +164,7 @@ const Login = () => {
               </form>
 
               {/* Demo Credentials */}
-              <div className="mt-6 pt-6 border-t border-slate-200">
+              {/* <div className="mt-6 pt-6 border-t border-slate-200">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
                   Testing Credentials
                 </p>
@@ -194,17 +182,9 @@ const Login = () => {
                     <p className="font-mono text-slate-800">analyst / user123</p>
                   </div>
                 </div>
-              </div>
+              </div> */}
             </CardContent>
           </Card>
-
-          {/* Legal Notice */}
-          <div className="mt-4 p-3 bg-white border border-slate-200 rounded-md">
-            <p className="text-xs text-slate-600 leading-relaxed">
-              <strong className="text-slate-700">Security Notice:</strong> Unauthorized access to this system is prohibited 
-              and may result in criminal prosecution. All activities are monitored and logged for security purposes.
-            </p>
-          </div>
         </div>
       </main>
 

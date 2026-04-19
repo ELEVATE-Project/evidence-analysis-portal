@@ -94,11 +94,6 @@ const Layout = ({ children }) => {
           })}
         </ul>
       </nav>
-
-      <div className="border-t border-slate-200 px-4 py-4 text-xs text-slate-500">
-        <p className="font-medium text-slate-600">Secure Portal</p>
-        <p className="mt-1">Authorized usage is monitored and logged.</p>
-      </div>
     </div>
   );
 

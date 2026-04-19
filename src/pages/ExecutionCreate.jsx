@@ -1,32 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AlertCircle, FileSpreadsheet, ListChecks, PlayCircle, RefreshCw, UploadCloud } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AlertCircle, RefreshCw } from 'lucide-react';
+import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { ENV } from '../config/env';
 import { entityService, executionService } from '../services/executionService';
+import ExecutionWizardStepper from '../components/executions/ExecutionWizardStepper';
 
-const steps = [
-  {
-    title: 'Upload Input Data',
-    description: 'Add the evidence input CSV for the selected program scope.',
-    icon: FileSpreadsheet,
-  },
-  {
-    title: 'Upload Criteria File',
-    description: 'Attach the criteria/questions CSV used for analysis evaluation.',
-    icon: ListChecks,
-  },
-  {
-    title: 'Start Analysis Run',
-    description: 'Submit and monitor progress from Dashboard and View Analyses.',
-    icon: PlayCircle,
-  },
-];
+const DEFAULT_CSV_TYPE_ID = ENV.DEFAULT_CSV_TYPE_ID;
 
 const ExecutionCreate = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const executionIdFromUrl = searchParams.get('executionId');
 
   const [states, setStates] = useState([]);
   const [districts, setDistricts] = useState([]);
@@ -34,9 +22,12 @@ const ExecutionCreate = () => {
   const [districtsLoading, setDistrictsLoading] = useState(false);
   const [stateError, setStateError] = useState('');
   const [districtError, setDistrictError] = useState('');
-  const [submitError, setSubmitError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [createdId, setCreatedId] = useState('');
+  const [creatingAnalysis, setCreatingAnalysis] = useState(false);
+  const [loadingExecution, setLoadingExecution] = useState(false);
+  const [globalError, setGlobalError] = useState('');
+  const [globalSuccess, setGlobalSuccess] = useState('');
+  const [executionId, setExecutionId] = useState(executionIdFromUrl || '');
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const [formValues, setFormValues] = useState({
     name: '',
@@ -44,23 +35,17 @@ const ExecutionCreate = () => {
     stateName: '',
     districtId: '',
     districtName: '',
-    programName: '',
-    inputFile: null,
-    questionsFile: null,
   });
 
-  const stateOptionMap = useMemo(() => {
-    return new Map(states.map((stateItem) => [stateItem.id, stateItem]));
-  }, [states]);
-
-  const districtOptionMap = useMemo(() => {
-    return new Map(districts.map((districtItem) => [districtItem.id, districtItem]));
-  }, [districts]);
+  const stateOptionMap = useMemo(() => new Map(states.map((stateItem) => [stateItem.id, stateItem])), [states]);
+  const districtOptionMap = useMemo(
+    () => new Map(districts.map((districtItem) => [districtItem.id, districtItem])),
+    [districts]
+  );
 
   const loadStates = async () => {
     setStatesLoading(true);
     setStateError('');
-
     try {
       const stateItems = await entityService.getStates();
       setStates(stateItems);
@@ -77,10 +62,8 @@ const ExecutionCreate = () => {
       setDistricts([]);
       return;
     }
-
     setDistrictsLoading(true);
     setDistrictError('');
-
     try {
       const districtItems = await entityService.getDistricts(stateId);
       setDistricts(districtItems);
@@ -96,22 +79,82 @@ const ExecutionCreate = () => {
     void loadStates();
   }, []);
 
+  useEffect(() => {
+    if (executionIdFromUrl) {
+      void loadExecution(executionIdFromUrl);
+    }
+  }, [executionIdFromUrl]);
+
+  const loadExecution = async (id) => {
+    setLoadingExecution(true);
+    setGlobalError('');
+    try {
+      const execution = await executionService.getExecution(id);
+      
+      if (!['draft', 'validated'].includes((execution.status || '').toLowerCase())) {
+        setGlobalError('Only draft or validated executions can be edited.');
+        return;
+      }
+
+      setIsEditMode(true);
+      setExecutionId(id);
+      
+      // Find the state in the loaded states list
+      const matchingState = states.find(s => s.name === execution.state);
+      
+      setFormValues({
+        name: execution.name || '',
+        stateId: matchingState?.id || '',
+        stateName: execution.state || '',
+        districtId: '',
+        districtName: execution.district || '',
+      });
+
+      // Load districts if state is available and set the district after loading
+      if (matchingState?.id && execution.district) {
+        try {
+          await loadDistricts(matchingState.id);
+          // After districts are loaded, we need to find and set the district ID
+          // This will happen in the useEffect below
+        } catch (err) {
+          // District loading failed, but we can still proceed
+          console.error('Failed to load districts:', err);
+        }
+      }
+    } catch (error) {
+      const message = error?.response?.data?.detail || error?.message || 'Failed to load execution.';
+      setGlobalError(typeof message === 'string' ? message : 'Failed to load execution.');
+    } finally {
+      setLoadingExecution(false);
+    }
+  };
+
+  // Effect to set district ID after districts are loaded
+  useEffect(() => {
+    if (isEditMode && formValues.districtName && districts.length > 0 && !formValues.districtId) {
+      const matchingDistrict = districts.find(d => d.name === formValues.districtName);
+      if (matchingDistrict) {
+        setFormValues(prev => ({
+          ...prev,
+          districtId: matchingDistrict.id,
+        }));
+      }
+    }
+  }, [districts, formValues.districtName, isEditMode, formValues.districtId]);
+
   const handleTextChange = (event) => {
     const { name, value } = event.target;
-    setSubmitError('');
-    setCreatedId('');
-    setFormValues((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    setGlobalError('');
+    setGlobalSuccess('');
+    setFormValues((current) => ({ ...current, [name]: value }));
   };
 
   const handleStateChange = (event) => {
     const selectedStateId = event.target.value;
     const selectedState = stateOptionMap.get(selectedStateId);
 
-    setSubmitError('');
-    setCreatedId('');
+    setGlobalError('');
+    setGlobalSuccess('');
     setDistrictError('');
     setDistricts([]);
     setFormValues((current) => ({
@@ -131,8 +174,8 @@ const ExecutionCreate = () => {
     const selectedDistrictId = event.target.value;
     const selectedDistrict = districtOptionMap.get(selectedDistrictId);
 
-    setSubmitError('');
-    setCreatedId('');
+    setGlobalError('');
+    setGlobalSuccess('');
     setFormValues((current) => ({
       ...current,
       districtId: selectedDistrictId,
@@ -140,121 +183,111 @@ const ExecutionCreate = () => {
     }));
   };
 
-  const handleFileChange = (event) => {
-    const { name, files } = event.target;
-    setSubmitError('');
-    setCreatedId('');
-    setFormValues((current) => ({
-      ...current,
-      [name]: files?.[0] || null,
-    }));
+  const validateCreateForm = () => {
+    if (!formValues.name.trim()) {
+      setGlobalError('Analysis name is required.');
+      return false;
+    }
+    if (!formValues.stateId) {
+      setGlobalError('Please select a state.');
+      return false;
+    }
+    if (districts.length > 0 && !formValues.districtId) {
+      setGlobalError('Please select a district.');
+      return false;
+    }
+    return true;
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setSubmitError('');
-    setCreatedId('');
+  const createDraft = async () => {
+    setGlobalError('');
+    setGlobalSuccess('');
+    if (!validateCreateForm()) return null;
 
-    if (!formValues.name.trim()) {
-      setSubmitError('Analysis name is required.');
-      return;
-    }
-
-    if (!formValues.stateId) {
-      setSubmitError('Please select a state.');
-      return;
-    }
-
-    if (districts.length > 0 && !formValues.districtId) {
-      setSubmitError('Please select a district.');
-      return;
-    }
-
-    if (!formValues.inputFile) {
-      setSubmitError('Input CSV file is required.');
-      return;
-    }
-
-    if (!formValues.questionsFile) {
-      setSubmitError('Criteria/questions CSV file is required.');
-      return;
-    }
-
-    const payload = new FormData();
-    payload.append('name', formValues.name.trim());
-    payload.append('state', formValues.stateName);
-
-    if (formValues.districtName) {
-      payload.append('district', formValues.districtName);
-    }
-
-    if (formValues.programName.trim()) {
-      payload.append('program_name', formValues.programName.trim());
-    }
-
-    payload.append('input_file', formValues.inputFile);
-    payload.append('questions_file', formValues.questionsFile);
-
-    setSubmitting(true);
-
+    setCreatingAnalysis(true);
     try {
-      const createdExecution = await executionService.createExecution(payload);
-      const executionId = createdExecution?.id || '';
-      setCreatedId(executionId);
-      navigate('/executions');
+      if (isEditMode && executionId) {
+        // Update existing draft
+        const response = await executionService.updateExecution(executionId, {
+          name: formValues.name.trim(),
+          state: formValues.stateName,
+          district: formValues.districtName || undefined,
+        });
+        setGlobalSuccess('Analysis updated successfully.');
+        return response?.id || executionId;
+      } else {
+        // Create new draft
+        const response = await executionService.createExecutionDraft({
+          name: formValues.name.trim(),
+          csv_type_id: DEFAULT_CSV_TYPE_ID,
+          state: formValues.stateName,
+          district: formValues.districtName || undefined,
+        });
+        const id = response?.id || '';
+        setExecutionId(id);
+        setGlobalSuccess('Analysis created successfully.');
+        return id;
+      }
     } catch (error) {
-      const errorMessage =
-        error?.response?.data?.detail ||
-        error?.message ||
-        'Failed to create analysis run. Please retry.';
-      setSubmitError(errorMessage);
+      const message = error?.response?.data?.detail || error?.message || 'Failed to save analysis.';
+      setGlobalError(typeof message === 'string' ? message : 'Failed to save analysis.');
+      return null;
     } finally {
-      setSubmitting(false);
+      setCreatingAnalysis(false);
+    }
+  };
+
+  const handleSaveAsDraft = async () => {
+    if (executionId && !isEditMode) {
+      setGlobalSuccess('Analysis draft already created.');
+      return;
+    }
+    await createDraft();
+  };
+
+  const handleSaveAndProceed = async () => {
+    let id = executionId;
+    if (!id) {
+      id = await createDraft();
+    }
+    if (id) {
+      navigate(`/executions/create/upload?executionId=${id}`);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="border-slate-200 shadow-sm">
-        <CardContent className="p-6">
-          <h2 className="text-2xl font-semibold text-slate-800">Start Analysis Run</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Create a new analysis run by uploading required files and selecting metadata.
-          </p>
-        </CardContent>
-      </Card>
+    <div className="mx-auto max-w-5xl px-4 sm:px-6">
+      <Card className="border-slate-200 bg-white shadow-sm">
+        <CardContent className="space-y-6 p-4 sm:p-6">
+          <ExecutionWizardStepper activeStep={1} />
 
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg text-slate-800">Run Setup</CardTitle>
-          <CardDescription>
-            Configure metadata and upload required files to start a new analysis run.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            {steps.map((step) => {
-              const Icon = step.icon;
-
-              return (
-                <div
-                  key={step.title}
-                  className="rounded-md border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm"
-                >
-                  <div className="mb-3 inline-flex rounded-md border border-blue-100 bg-blue-50 p-2 text-blue-600">
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-800">{step.title}</h3>
-                  <p className="mt-1 text-xs text-slate-600">{step.description}</p>
-                </div>
-              );
-            })}
+          <div>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-slate-900">
+              {isEditMode ? 'Edit Analysis Setup' : 'Create Analysis Setup'}
+            </h2>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4 rounded-md border border-slate-200 bg-slate-50 p-5">
-            <div className="grid gap-4 md:grid-cols-2">
+          {loadingExecution ? (
+            <div className="rounded-md border border-slate-200 p-8">
+              <div className="flex items-center justify-center gap-3">
+                <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
+                <span className="text-sm text-slate-600">Loading execution details...</span>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md border border-slate-200">
+              <div className="border-b border-slate-200 px-4 sm:px-5 py-4">
+                <h3 className="text-base sm:text-lg font-medium text-slate-900">
+                  Step 1: {isEditMode ? 'Edit' : 'Create'} Analysis
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Please provide {isEditMode ? 'updated' : 'initial'} analysis details.
+                </p>
+              </div>
+
+            <div className="space-y-5 px-4 sm:px-5 py-4">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-slate-700">
+                <Label htmlFor="name" className="text-sm font-medium text-slate-800">
                   Analysis Name
                 </Label>
                 <Input
@@ -263,170 +296,109 @@ const ExecutionCreate = () => {
                   value={formValues.name}
                   onChange={handleTextChange}
                   placeholder="Enter analysis run name"
-                  className="border-slate-300 bg-white text-slate-800"
+                  className="max-w-2xl border-slate-300 bg-white text-slate-800"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="programName" className="text-slate-700">
-                  Program Name (Optional)
-                </Label>
-                <Input
-                  id="programName"
-                  name="programName"
-                  value={formValues.programName}
-                  onChange={handleTextChange}
-                  placeholder="Enter program name"
-                  className="border-slate-300 bg-white text-slate-800"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2 text-sm text-slate-700">
-                <span className="font-medium">State</span>
-                <select
-                  name="state"
-                  value={formValues.stateId}
-                  onChange={handleStateChange}
-                  disabled={statesLoading}
-                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
-                >
-                  <option value="">
-                    {statesLoading ? 'Loading states...' : 'Select state'}
-                  </option>
-                  {states.map((stateItem) => (
-                    <option key={stateItem.id} value={stateItem.id}>
-                      {stateItem.name}
-                    </option>
-                  ))}
-                </select>
-                {stateError && <p className="text-xs text-rose-700">{stateError}</p>}
-                {stateError && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-8 border-slate-300 px-3 text-xs text-slate-700 hover:bg-slate-100"
-                    onClick={() => void loadStates()}
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="font-medium">State</span>
+                  <select
+                    value={formValues.stateId}
+                    onChange={handleStateChange}
                     disabled={statesLoading}
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
                   >
-                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${statesLoading ? 'animate-spin' : ''}`} />
-                    Retry States
-                  </Button>
-                )}
-              </label>
+                    <option value="">{statesLoading ? 'Loading states...' : 'Select state'}</option>
+                    {states.map((stateItem) => (
+                      <option key={stateItem.id} value={stateItem.id}>
+                        {stateItem.name}
+                      </option>
+                    ))}
+                  </select>
+                  {stateError && <p className="text-xs text-rose-700">{stateError}</p>}
+                </label>
 
-              <label className="space-y-2 text-sm text-slate-700">
-                <span className="font-medium">District</span>
-                <select
-                  name="district"
-                  value={formValues.districtId}
-                  onChange={handleDistrictChange}
-                  disabled={!formValues.stateId || districtsLoading}
-                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
-                >
-                  <option value="">
-                    {!formValues.stateId
-                      ? 'Select state first'
-                      : districtsLoading
-                        ? 'Loading districts...'
-                        : 'Select district'}
-                  </option>
-                  {districts.map((districtItem) => (
-                    <option key={districtItem.id} value={districtItem.id}>
-                      {districtItem.name}
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="font-medium">District</span>
+                  <select
+                    value={formValues.districtId}
+                    onChange={handleDistrictChange}
+                    disabled={!formValues.stateId || districtsLoading}
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+                  >
+                    <option value="">
+                      {!formValues.stateId ? 'Select state first' : districtsLoading ? 'Loading districts...' : 'Select district'}
                     </option>
-                  ))}
-                </select>
-                {districtError && <p className="text-xs text-rose-700">{districtError}</p>}
-              </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="inputFile" className="text-slate-700">
-                  Input Data CSV
-                </Label>
-                <Input
-                  id="inputFile"
-                  name="inputFile"
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileChange}
-                  className="border-slate-300 bg-white text-slate-800 file:cursor-pointer"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="questionsFile" className="text-slate-700">
-                  Criteria / Questions CSV
-                </Label>
-                <Input
-                  id="questionsFile"
-                  name="questionsFile"
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileChange}
-                  className="border-slate-300 bg-white text-slate-800 file:cursor-pointer"
-                />
+                    {districts.map((districtItem) => (
+                      <option key={districtItem.id} value={districtItem.id}>
+                        {districtItem.name}
+                      </option>
+                    ))}
+                  </select>
+                  {districtError && <p className="text-xs text-rose-700">{districtError}</p>}
+                </label>
               </div>
             </div>
 
-            {submitError && (
-              <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{submitError}</span>
-              </div>
-            )}
-
-            {createdId && (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                Analysis run created successfully: {createdId}
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                type="submit"
-                className="bg-blue-600 text-white hover:bg-blue-700"
-                disabled={submitting || statesLoading || !states.length}
-              >
-                {submitting ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Starting...
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="mr-2 h-4 w-4" />
-                    Start Analysis Run
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="border-slate-300 text-slate-700 hover:bg-slate-100"
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-200 px-4 sm:px-5 py-4">
+              <Button 
+                type="button" 
+                variant="outline" 
                 onClick={() => navigate('/executions')}
-                disabled={submitting}
+                className="w-full sm:w-auto order-2 sm:order-1"
               >
                 Cancel
               </Button>
-            </div>
-          </form>
-
-          <div className="mt-4 rounded-md border border-dashed border-slate-300 bg-white p-4">
-            <div className="flex items-start gap-3 text-slate-600">
-              <UploadCloud className="mt-0.5 h-4 w-4 text-blue-600" />
-              <div className="text-xs">
-                <p className="font-medium text-slate-700">Data source policy</p>
-                <p className="mt-1">
-                  States and districts are fetched only from backend APIs (`/api/v1/states`, `/api/v1/districts`)
-                  and never from Entity Management service directly in the browser.
-                </p>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 order-1 sm:order-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  disabled={creatingAnalysis} 
+                  onClick={() => void handleSaveAsDraft()}
+                  className="w-full sm:w-auto"
+                >
+                  {creatingAnalysis ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    isEditMode ? 'Update Draft' : 'Save as Draft'
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
+                  disabled={creatingAnalysis}
+                  onClick={() => void handleSaveAndProceed()}
+                >
+                  {creatingAnalysis ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <span className="truncate">{isEditMode ? 'Update & Proceed to Upload' : 'Save & Proceed to Upload'}</span>
+                  )}
+                </Button>
               </div>
             </div>
           </div>
+          )}
+
+          {globalError && (
+            <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{globalError}</span>
+            </div>
+          )}
+
+          {globalSuccess && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {globalSuccess}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
