@@ -320,6 +320,14 @@ export const executionService = {
     return response.data;
   },
 
+  // Get read-only preview rows for one execution file
+  getExecutionFilePreview: async (executionId, fileType, limit = 10) => {
+    const response = await apiClient.get(`/executions/${executionId}/files/${fileType}/preview`, {
+      params: { limit },
+    });
+    return response.data;
+  },
+
   // Update execution (only drafts)
   updateExecution: async (executionId, updateData) => {
     const response = await apiClient.patch(`/executions/${executionId}`, updateData);
