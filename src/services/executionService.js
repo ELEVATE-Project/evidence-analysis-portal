@@ -350,9 +350,17 @@ export const executionService = {
   },
 
   // Get execution list
-  getExecutions: async (page = 1, pageSize = 20, status = null) => {
+  getExecutions: async (page = 1, pageSize = 20, statusOrOptions = null, options = {}) => {
     const params = { page, page_size: pageSize };
-    if (status) params.status_filter = status;
+
+    if (statusOrOptions && typeof statusOrOptions === 'object' && !Array.isArray(statusOrOptions)) {
+      Object.assign(params, statusOrOptions);
+    } else {
+      if (statusOrOptions) params.status_filter = statusOrOptions;
+      if (options && typeof options === 'object') {
+        Object.assign(params, options);
+      }
+    }
 
     const response = await apiClient.get('/executions/', { params });
     return response.data;
