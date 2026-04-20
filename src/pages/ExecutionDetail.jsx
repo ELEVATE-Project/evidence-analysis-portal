@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertCircle, FileSearch, Pencil, RefreshCw } from 'lucide-react';
+import { AlertCircle, FileSearch, FileText, Pencil, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { executionService, getApiErrorMessage } from '../services/executionService';
-import { formatDateTime, getAnalysisStatusMeta } from '../lib/analysis';
+import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
 
 const PREVIEW_LIMIT = 10;
 
@@ -133,6 +133,9 @@ const ExecutionDetail = () => {
   const canEdit = useMemo(() => {
     const normalizedStatus = `${statusInfo?.status || execution?.status || ''}`.toLowerCase();
     return normalizedStatus === 'draft' || normalizedStatus === 'validated';
+  }, [execution?.status, statusInfo?.status]);
+  const canViewReport = useMemo(() => {
+    return getAnalysisStatusGroup(statusInfo?.status || execution?.status) === 'completed';
   }, [execution?.status, statusInfo?.status]);
 
   const quickDetails = useMemo(
@@ -280,6 +283,17 @@ const ExecutionDetail = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          {canViewReport ? (
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => navigate(`/reports/${execution.id}`)}
+            >
+              <FileText className="mr-1.5 h-4 w-4" />
+              View Report
+            </Button>
+          ) : null}
+
           {canEdit ? (
             <Button
               type="button"

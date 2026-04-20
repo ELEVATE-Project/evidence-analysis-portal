@@ -13,6 +13,10 @@ export const getAnalysisStatusGroup = (status) => {
     return 'draft';
   }
 
+  if (normalizedStatus === 'queued' || normalizedStatus === 'in_progress' || normalizedStatus === 'running') {
+    return 'in_progress';
+  }
+
   return 'in_progress';
 };
 
