@@ -28,6 +28,7 @@ const ExecutionCreate = () => {
   const [globalSuccess, setGlobalSuccess] = useState('');
   const [executionId, setExecutionId] = useState(executionIdFromUrl || '');
   const [isEditMode, setIsEditMode] = useState(false);
+  const [prefillLoaded, setPrefillLoaded] = useState(false);
 
   const [formValues, setFormValues] = useState({
     name: '',
@@ -82,12 +83,26 @@ const ExecutionCreate = () => {
   useEffect(() => {
     if (executionIdFromUrl) {
       void loadExecution(executionIdFromUrl);
+      return;
     }
+    setIsEditMode(false);
+    setExecutionId('');
+    setPrefillLoaded(false);
+    setFormValues({
+      name: '',
+      stateId: '',
+      stateName: '',
+      districtId: '',
+      districtName: '',
+    });
   }, [executionIdFromUrl]);
 
   const loadExecution = async (id) => {
     setLoadingExecution(true);
     setGlobalError('');
+    setPrefillLoaded(false);
+    setIsEditMode(false);
+    setDistricts([]);
     try {
       const execution = await executionService.getExecution(id);
       
@@ -98,29 +113,14 @@ const ExecutionCreate = () => {
 
       setIsEditMode(true);
       setExecutionId(id);
-      
-      // Find the state in the loaded states list
-      const matchingState = states.find(s => s.name === execution.state);
-      
       setFormValues({
         name: execution.name || '',
-        stateId: matchingState?.id || '',
+        stateId: '',
         stateName: execution.state || '',
         districtId: '',
         districtName: execution.district || '',
       });
-
-      // Load districts if state is available and set the district after loading
-      if (matchingState?.id && execution.district) {
-        try {
-          await loadDistricts(matchingState.id);
-          // After districts are loaded, we need to find and set the district ID
-          // This will happen in the useEffect below
-        } catch (err) {
-          // District loading failed, but we can still proceed
-          console.error('Failed to load districts:', err);
-        }
-      }
+      setPrefillLoaded(true);
     } catch (error) {
       const message = error?.response?.data?.detail || error?.message || 'Failed to load execution.';
       setGlobalError(typeof message === 'string' ? message : 'Failed to load execution.');
@@ -128,6 +128,24 @@ const ExecutionCreate = () => {
       setLoadingExecution(false);
     }
   };
+
+  useEffect(() => {
+    if (!isEditMode || !prefillLoaded || !formValues.stateName || formValues.stateId || states.length === 0) {
+      return;
+    }
+
+    const matchingState = states.find((stateItem) => stateItem.name === formValues.stateName);
+    if (!matchingState) {
+      return;
+    }
+
+    setFormValues((current) => ({
+      ...current,
+      stateId: matchingState.id,
+      stateName: matchingState.name,
+    }));
+    void loadDistricts(matchingState.id);
+  }, [formValues.stateId, formValues.stateName, isEditMode, prefillLoaded, states]);
 
   // Effect to set district ID after districts are loaded
   useEffect(() => {
@@ -211,7 +229,7 @@ const ExecutionCreate = () => {
         const response = await executionService.updateExecution(executionId, {
           name: formValues.name.trim(),
           state: formValues.stateName,
-          district: formValues.districtName || undefined,
+          district: formValues.districtName || null,
         });
         setGlobalSuccess('Analysis updated successfully.');
         return response?.id || executionId;
@@ -247,7 +265,7 @@ const ExecutionCreate = () => {
 
   const handleSaveAndProceed = async () => {
     let id = executionId;
-    if (!id) {
+    if (isEditMode || !id) {
       id = await createDraft();
     }
     if (id) {

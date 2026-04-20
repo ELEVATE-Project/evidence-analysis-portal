@@ -14,6 +14,7 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
 ];
+const PAGE_SIZE = 10;
 
 const toSortedUniqueOptions = (values) => {
   const normalizedValues = values
@@ -29,6 +30,8 @@ const ExecutionList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [analyses, setAnalyses] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [states, setStates] = useState([]);
   const [districts, setDistricts] = useState([]);
@@ -80,12 +83,39 @@ const ExecutionList = () => {
     setLoading(true);
     setError('');
 
+    const queryParams = {
+      page: currentPage,
+      page_size: PAGE_SIZE,
+    };
+
+    if (filters.status !== 'all') {
+      queryParams.status_group = filters.status;
+    }
+    if (filters.state !== 'all') {
+      queryParams.state_filter = filters.state;
+    }
+    if (filters.district !== 'all') {
+      queryParams.district_filter = filters.district;
+    }
+
+    const normalizedSearchQuery = searchQuery.trim();
+    if (normalizedSearchQuery) {
+      queryParams.search_query = normalizedSearchQuery;
+    }
+
     try {
-      const response = await executionService.getExecutions(1, 250);
+      const response = await executionService.getExecutions(
+        queryParams.page,
+        queryParams.page_size,
+        null,
+        queryParams
+      );
       setAnalyses(Array.isArray(response?.items) ? response.items : []);
+      setTotalItems(typeof response?.total === 'number' ? response.total : 0);
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Unable to load analyses right now.'));
       setAnalyses([]);
+      setTotalItems(0);
     } finally {
       setLoading(false);
     }
@@ -131,9 +161,12 @@ const ExecutionList = () => {
   };
 
   useEffect(() => {
-    void loadAnalyses();
     void loadStates();
   }, []);
+
+  useEffect(() => {
+    void loadAnalyses();
+  }, [currentPage, filters.status, filters.state, filters.district, searchQuery]);
 
   useEffect(() => {
     if (filters.state === 'all') {
@@ -153,20 +186,15 @@ const ExecutionList = () => {
     void loadDistricts(selectedStateId);
   }, [filters.state, stateNameToIdMap]);
 
-  const filteredAnalyses = useMemo(() => {
-    return analyses
-      .filter((analysis) => {
-        const statusMatch =
-          filters.status === 'all' || getAnalysisStatusGroup(analysis.status) === filters.status;
-        const stateMatch = filters.state === 'all' || analysis.state === filters.state;
-        const districtMatch = filters.district === 'all' || analysis.district === filters.district;
-        const searchMatch = !searchQuery.trim() || 
-          (analysis.name || '').toLowerCase().includes(searchQuery.toLowerCase().trim());
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const pageStartItem = totalItems === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageEndItem = totalItems === 0 ? 0 : Math.min(currentPage * PAGE_SIZE, totalItems);
 
-        return statusMatch && stateMatch && districtMatch && searchMatch;
-      })
-      .sort((first, second) => new Date(second.created_at) - new Date(first.created_at));
-  }, [analyses, filters, searchQuery]);
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -185,6 +213,7 @@ const ExecutionList = () => {
         [name]: value,
       };
     });
+    setCurrentPage(1);
   };
 
   const clearFilters = () => {
@@ -194,6 +223,7 @@ const ExecutionList = () => {
       district: 'all',
     });
     setSearchQuery('');
+    setCurrentPage(1);
   };
 
   const districtFilterDisabled = filters.state === 'all' || districtsLoading;
@@ -237,7 +267,7 @@ const ExecutionList = () => {
             <Filter className="h-4 w-4 text-blue-600" />
             Filter Analyses
           </CardTitle>
-          <CardDescription>{filteredAnalyses.length} analyses match current filters.</CardDescription>
+          <CardDescription>{totalItems} analyses match current filters.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -247,7 +277,10 @@ const ExecutionList = () => {
                 type="text"
                 placeholder="Search by analysis name..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setCurrentPage(1);
+                }}
                 className="h-10 w-full pl-10 border-slate-300 bg-white text-slate-800"
               />
             </div>
@@ -341,7 +374,7 @@ const ExecutionList = () => {
                 <div key={index} className="h-12 animate-pulse rounded-md bg-slate-100" />
               ))}
             </div>
-          ) : filteredAnalyses.length === 0 ? (
+          ) : totalItems === 0 ? (
             <div className="p-10 text-center">
               <p className="text-sm font-medium text-slate-700">No analyses found.</p>
               <p className="mt-1 text-xs text-slate-500">Adjust filters or start a new analysis run.</p>
@@ -362,7 +395,7 @@ const ExecutionList = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredAnalyses.map((analysis) => {
+                    {analyses.map((analysis) => {
                       const statusMeta = getAnalysisStatusMeta(analysis.status);
 
                       return (
@@ -431,7 +464,7 @@ const ExecutionList = () => {
 
               {/* Mobile Card View */}
               <div className="md:hidden divide-y divide-slate-200">
-                {filteredAnalyses.map((analysis) => {
+                {analyses.map((analysis) => {
                   const statusMeta = getAnalysisStatusMeta(analysis.status);
 
                   return (
@@ -505,6 +538,36 @@ const ExecutionList = () => {
                   );
                 })}
               </div>
+
+              <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-slate-600">
+                  Showing {pageStartItem}-{pageEndItem} of {totalItems}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 border-slate-300 px-3 text-xs text-slate-700 hover:bg-slate-100"
+                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                    disabled={currentPage <= 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs font-medium text-slate-700">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 border-slate-300 px-3 text-xs text-slate-700 hover:bg-slate-100"
+                    onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                    disabled={currentPage >= totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+
             </>
           )}
         </CardContent>

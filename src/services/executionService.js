@@ -135,10 +135,56 @@ const uploadFileToSignedUrl = async (signedUpload, file) => {
   }
 };
 
+const formatErrorDetailItem = (item) => {
+  if (typeof item === 'string' && item.trim()) {
+    return item.trim();
+  }
+
+  if (!item || typeof item !== 'object') {
+    return '';
+  }
+
+  const message = typeof item.msg === 'string' && item.msg.trim() ? item.msg.trim() : '';
+  const location = Array.isArray(item.loc)
+    ? item.loc
+        .map((segment) => (typeof segment === 'string' || typeof segment === 'number' ? String(segment).trim() : ''))
+        .filter(Boolean)
+        .join('.')
+    : '';
+
+  if (location && message) {
+    return `${location}: ${message}`;
+  }
+  if (message) {
+    return message;
+  }
+
+  const detail = typeof item.detail === 'string' && item.detail.trim() ? item.detail.trim() : '';
+  if (detail) {
+    return detail;
+  }
+
+  return '';
+};
+
 export const getApiErrorMessage = (error, fallbackMessage = 'Request failed.') => {
   const detail = error?.response?.data?.detail;
   if (typeof detail === 'string' && detail.trim()) {
     return detail.trim();
+  }
+
+  if (Array.isArray(detail)) {
+    const parts = detail.map(formatErrorDetailItem).filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join('; ');
+    }
+  }
+
+  if (detail && typeof detail === 'object') {
+    const part = formatErrorDetailItem(detail);
+    if (part) {
+      return part;
+    }
   }
 
   const message = error?.response?.data?.message;
@@ -224,7 +270,11 @@ export const executionService = {
     formData.append('execution_id', executionId);
     formData.append('file_type', fileType);
     formData.append('file', file);
-    const response = await apiClient.post('/cloud-services/upload', formData);
+    const response = await apiClient.post('/cloud-services/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 
@@ -300,9 +350,17 @@ export const executionService = {
   },
 
   // Get execution list
-  getExecutions: async (page = 1, pageSize = 20, status = null) => {
+  getExecutions: async (page = 1, pageSize = 20, statusOrOptions = null, options = {}) => {
     const params = { page, page_size: pageSize };
-    if (status) params.status_filter = status;
+
+    if (statusOrOptions && typeof statusOrOptions === 'object' && !Array.isArray(statusOrOptions)) {
+      Object.assign(params, statusOrOptions);
+    } else {
+      if (statusOrOptions) params.status_filter = statusOrOptions;
+      if (options && typeof options === 'object') {
+        Object.assign(params, options);
+      }
+    }
 
     const response = await apiClient.get('/executions/', { params });
     return response.data;
@@ -317,6 +375,14 @@ export const executionService = {
   // Get execution status
   getExecutionStatus: async (executionId) => {
     const response = await apiClient.get(`/executions/${executionId}/status`);
+    return response.data;
+  },
+
+  // Get read-only preview rows for one execution file
+  getExecutionFilePreview: async (executionId, fileType, limit = 10) => {
+    const response = await apiClient.get(`/executions/${executionId}/files/${fileType}/preview`, {
+      params: { limit },
+    });
     return response.data;
   },
 
