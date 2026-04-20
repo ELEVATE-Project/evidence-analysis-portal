@@ -16,7 +16,7 @@ import { useAuth } from '../context/AuthContext';
 const navigationItems = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
   { label: 'Analyses', path: '/executions', icon: ListChecks },
-  { label: 'Validate Criteria', path: '/testing', icon: ClipboardCheck },
+  { label: 'Validate Criteria', path: '/validate-criteria', icon: ClipboardCheck },
   { label: 'View Reports', path: '/reports', icon: FileText },
 ];
 

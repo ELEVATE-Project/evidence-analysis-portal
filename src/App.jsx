@@ -43,7 +43,8 @@ function App() {
                     <Route path="/executions/:id" element={<ExecutionDetail />} />
                     <Route path="/reports" element={<ReportsList />} />
                     <Route path="/reports/:id" element={<ReportView />} />
-                    <Route path="/testing" element={<InteractiveTesting />} />
+                    <Route path="/validate-criteria" element={<InteractiveTesting />} />
+                    <Route path="/testing" element={<Navigate to="/validate-criteria" replace />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

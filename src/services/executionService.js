@@ -200,6 +200,17 @@ export const getApiErrorMessage = (error, fallbackMessage = 'Request failed.') =
 };
 
 export const executionService = {
+  // Validate evidence criteria against an evidence image URL
+  validateCriteria: async ({ evidence_url, evidence_criteria, prompt = null }) => {
+    const payload = {
+      evidence_url,
+      evidence_criteria,
+      prompt,
+    };
+    const response = await apiClient.post('/criteria/validate', payload);
+    return response.data;
+  },
+
   // Step 1: Create analysis draft
   createExecutionDraft: async ({
     name,
