@@ -46,6 +46,12 @@ const REQUIRED_COLUMNS = [
 ];
 
 const RELEVANCE_TYPES = ['Relevant', 'Partially Relevant', 'Irrelevant'];
+const MAX_TOP_HIERARCHY_ITEMS = 15;
+const REQUIRED_ENROLLMENT_COLUMNS = [
+  'Enrollment_2024',
+  'Enrollment_2025',
+  'Enrollment_Increase_Percentage',
+];
 
 const emptyFilters = {
   state: '',
@@ -447,13 +453,13 @@ const computeReportData = (rows) => {
                   ),
                 }))
                 .sort((a, b) => b.relevancePercent - a.relevancePercent)
-                .slice(0, 5),
+                .slice(0, MAX_TOP_HIERARCHY_ITEMS),
             }))
             .sort((a, b) => b.relevancePercent - a.relevancePercent)
-            .slice(0, 5),
+            .slice(0, MAX_TOP_HIERARCHY_ITEMS),
         }))
         .sort((a, b) => b.relevancePercent - a.relevancePercent)
-        .slice(0, 5);
+        .slice(0, MAX_TOP_HIERARCHY_ITEMS);
 
       return {
         district,
@@ -507,12 +513,20 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
   const [filters, setFilters] = useState(emptyFilters);
   const [expandedDistricts, setExpandedDistricts] = useState(new Set());
   const [expandedBlocks, setExpandedBlocks] = useState(new Set());
+  const [topHierarchyCount, setTopHierarchyCount] = useState(5);
+  const [expandedTopDistricts, setExpandedTopDistricts] = useState(new Set());
+  const [expandedTopBlocks, setExpandedTopBlocks] = useState(new Set());
+  const [expandedTopSchools, setExpandedTopSchools] = useState(new Set());
   const [pdfLoading, setPdfLoading] = useState(false);
 
   useEffect(() => {
     setFilters(emptyFilters);
     setExpandedDistricts(new Set());
     setExpandedBlocks(new Set());
+    setTopHierarchyCount(5);
+    setExpandedTopDistricts(new Set());
+    setExpandedTopBlocks(new Set());
+    setExpandedTopSchools(new Set());
   }, [csvText]);
 
   const parsed = useMemo(() => parseCsvText(csvText), [csvText]);
@@ -573,6 +587,10 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
   }, [filters.block, filters.district, filters.relevance, filters.school, filters.state, parsed.rows]);
 
   const reportData = useMemo(() => computeReportData(filteredRows), [filteredRows]);
+  const hasRequiredEnrollmentColumns = useMemo(
+    () => REQUIRED_ENROLLMENT_COLUMNS.every((column) => parsed.headers.includes(column)),
+    [parsed.headers]
+  );
 
   const shouldShowSubjectGrade = reportData.statesUpper.has('BIHAR');
 
@@ -591,6 +609,44 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
     });
   }, [reportData.enrollment]);
 
+  const enrollmentDistrictRowsSorted = useMemo(() => {
+    return [...enrollmentDistrictRows].sort((a, b) => b.enrollment2025 - a.enrollment2025);
+  }, [enrollmentDistrictRows]);
+
+  const enrollmentSummary = useMemo(() => {
+    return enrollmentDistrictRows.reduce(
+      (accumulator, row) => ({
+        enrollment2024: accumulator.enrollment2024 + row.enrollment2024,
+        enrollment2025: accumulator.enrollment2025 + row.enrollment2025,
+        districtCount: accumulator.districtCount + 1,
+      }),
+      {
+        enrollment2024: 0,
+        enrollment2025: 0,
+        districtCount: 0,
+      }
+    );
+  }, [enrollmentDistrictRows]);
+
+  const visibleTopHierarchy = useMemo(() => {
+    const trimTeachers = (teachers) => teachers.slice(0, topHierarchyCount);
+    const trimSchools = (schools) =>
+      schools.slice(0, topHierarchyCount).map((school) => ({
+        ...school,
+        teachers: trimTeachers(school.teachers),
+      }));
+    const trimBlocks = (blocks) =>
+      blocks.slice(0, topHierarchyCount).map((block) => ({
+        ...block,
+        schools: trimSchools(block.schools),
+      }));
+
+    return reportData.topHierarchy.slice(0, topHierarchyCount).map((district) => ({
+      ...district,
+      blocks: trimBlocks(district.blocks),
+    }));
+  }, [reportData.topHierarchy, topHierarchyCount]);
+
   const toggleDistrict = (district) => {
     setExpandedDistricts((previous) => {
       const next = new Set(previous);
@@ -606,6 +662,71 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
   const toggleBlock = (district, block) => {
     const key = `${district}||${block}`;
     setExpandedBlocks((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const toggleTopDistrict = (districtName) => {
+    setExpandedTopDistricts((previous) => {
+      const next = new Set(previous);
+      if (next.has(districtName)) {
+        next.delete(districtName);
+        setExpandedTopBlocks((previousBlocks) => {
+          const nextBlocks = new Set(previousBlocks);
+          Array.from(nextBlocks).forEach((key) => {
+            if (key.startsWith(`${districtName}||`)) {
+              nextBlocks.delete(key);
+            }
+          });
+          return nextBlocks;
+        });
+        setExpandedTopSchools((previousSchools) => {
+          const nextSchools = new Set(previousSchools);
+          Array.from(nextSchools).forEach((key) => {
+            if (key.startsWith(`${districtName}||`)) {
+              nextSchools.delete(key);
+            }
+          });
+          return nextSchools;
+        });
+      } else {
+        next.add(districtName);
+      }
+      return next;
+    });
+  };
+
+  const toggleTopBlock = (districtName, blockName) => {
+    const key = `${districtName}||${blockName}`;
+    setExpandedTopBlocks((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) {
+        next.delete(key);
+        setExpandedTopSchools((previousSchools) => {
+          const nextSchools = new Set(previousSchools);
+          Array.from(nextSchools).forEach((schoolKey) => {
+            if (schoolKey.startsWith(`${key}||`)) {
+              nextSchools.delete(schoolKey);
+            }
+          });
+          return nextSchools;
+        });
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const toggleTopSchool = (districtName, blockName, schoolName) => {
+    const key = `${districtName}||${blockName}||${schoolName}`;
+    setExpandedTopSchools((previous) => {
       const next = new Set(previous);
       if (next.has(key)) {
         next.delete(key);
@@ -1023,118 +1144,256 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
         </section>
 
         <section className="report-section">
-          <h3>🏆 Top Relevance Hierarchy</h3>
-          <p className="report-muted">Top 5 Districts → Top 5 Blocks → Top 5 Schools → Top 5 Teachers</p>
-          <div className="report-hierarchy-grid">
-            {reportData.topHierarchy.map((district) => (
-              <div key={district.district} className="report-hierarchy-card">
-                <h4>{district.district}</h4>
-                <p>{district.relevancePercent.toFixed(1)}% relevance</p>
-                {district.blocks.map((block) => (
-                  <div key={`${district.district}-${block.block}`} className="report-hierarchy-block">
-                    <strong>{block.block}</strong> ({block.relevancePercent.toFixed(1)}%)
-                    {block.schools.map((school) => (
-                      <div key={`${district.district}-${block.block}-${school.school}`} className="report-hierarchy-school">
-                        <span>{school.school} ({school.relevancePercent.toFixed(1)}%)</span>
-                        {school.teachers.slice(0, 3).map((teacher) => (
-                          <small key={`${district.district}-${block.block}-${school.school}-${teacher.teacher}`}>
-                            {teacher.teacher} ({teacher.relevancePercent.toFixed(1)}%)
-                          </small>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ))}
+          <div className="report-top-hierarchy-head">
+            <h3>🏆 Top Relevance Hierarchy</h3>
+            <label className="report-top-hierarchy-select-wrap">
+              <span>Show top:</span>
+              <select
+                value={topHierarchyCount}
+                onChange={(event) => {
+                  const nextTopN = Number.parseInt(event.target.value, 10) || 5;
+                  setTopHierarchyCount(nextTopN);
+                  setExpandedTopDistricts(new Set());
+                  setExpandedTopBlocks(new Set());
+                  setExpandedTopSchools(new Set());
+                }}
+              >
+                <option value={5}>Top 5</option>
+                <option value={10}>Top 10</option>
+                <option value={15}>Top 15</option>
+              </select>
+            </label>
+          </div>
+          <p className="report-muted report-top-hierarchy-description">
+            Top {topHierarchyCount} Districts → within each, Top {topHierarchyCount} Blocks → Top {topHierarchyCount} Schools → Top {topHierarchyCount} Teachers · ranked by Relevance %
+          </p>
+
+          <div className="report-table-wrap report-top-hierarchy-wrap">
+            <table className="report-top-hierarchy-table">
+              <thead>
+                <tr>
+                  <th>District / Block / School / Teacher</th>
+                  <th>Total Evidence</th>
+                  <th>% Relevant</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleTopHierarchy.length > 0 ? (
+                  visibleTopHierarchy.map((district, districtIndex) => {
+                    const districtKey = district.district;
+                    const districtExpanded = expandedTopDistricts.has(districtKey);
+
+                    return (
+                      <Fragment key={districtKey}>
+                        <tr
+                          className={`report-top-row report-top-district-row ${districtExpanded ? 'is-expanded' : ''}`}
+                          onClick={() => toggleTopDistrict(districtKey)}
+                        >
+                          <td className="report-top-clickable-cell">
+                            <div className="report-top-cell-content">
+                              <span className={`report-top-arrow ${districtExpanded ? 'is-rotated' : ''}`} />
+                              <strong>#{districtIndex + 1} {district.district}</strong>
+                            </div>
+                          </td>
+                          <td>{formatNumber(district.total)}</td>
+                          <td><span className="report-top-percentage-badge">{district.relevancePercent.toFixed(1)}%</span></td>
+                        </tr>
+
+                        {districtExpanded &&
+                          district.blocks.map((block, blockIndex) => {
+                            const blockKey = `${districtKey}||${block.block}`;
+                            const blockExpanded = expandedTopBlocks.has(blockKey);
+
+                            return (
+                              <Fragment key={blockKey}>
+                                <tr
+                                  className={`report-top-row report-top-block-row ${blockExpanded ? 'is-expanded' : ''}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleTopBlock(districtKey, block.block);
+                                  }}
+                                >
+                                  <td className="report-top-clickable-cell report-top-indent-1">
+                                    <div className="report-top-cell-content">
+                                      <span className={`report-top-arrow ${blockExpanded ? 'is-rotated' : ''}`} />
+                                      <span>#{blockIndex + 1} {block.block}</span>
+                                    </div>
+                                  </td>
+                                  <td>{formatNumber(block.total)}</td>
+                                  <td><span className="report-top-percentage-badge">{block.relevancePercent.toFixed(1)}%</span></td>
+                                </tr>
+
+                                {blockExpanded &&
+                                  block.schools.map((school, schoolIndex) => {
+                                    const schoolKey = `${districtKey}||${block.block}||${school.school}`;
+                                    const schoolExpanded = expandedTopSchools.has(schoolKey);
+
+                                    return (
+                                      <Fragment key={schoolKey}>
+                                        <tr
+                                          className={`report-top-row report-top-school-row ${schoolExpanded ? 'is-expanded' : ''}`}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            toggleTopSchool(districtKey, block.block, school.school);
+                                          }}
+                                        >
+                                          <td className="report-top-clickable-cell report-top-indent-2">
+                                            <div className="report-top-cell-content">
+                                              <span className={`report-top-arrow ${schoolExpanded ? 'is-rotated' : ''}`} />
+                                              <span>#{schoolIndex + 1} {school.school}</span>
+                                            </div>
+                                          </td>
+                                          <td>{formatNumber(school.total)}</td>
+                                          <td><span className="report-top-percentage-badge">{school.relevancePercent.toFixed(1)}%</span></td>
+                                        </tr>
+
+                                        {schoolExpanded &&
+                                          school.teachers.map((teacher, teacherIndex) => (
+                                            <tr
+                                              key={`${schoolKey}||${teacher.teacher}`}
+                                              className="report-top-row report-top-teacher-row"
+                                            >
+                                              <td className="report-top-indent-3">
+                                                <div className="report-top-cell-content">
+                                                  <span className="report-top-teacher-icon">👤</span>
+                                                  <span>#{teacherIndex + 1}</span>
+                                                  <code>{teacher.teacher}</code>
+                                                </div>
+                                              </td>
+                                              <td>{formatNumber(teacher.total)}</td>
+                                              <td><span className="report-top-percentage-badge">{teacher.relevancePercent.toFixed(1)}%</span></td>
+                                            </tr>
+                                          ))}
+                                      </Fragment>
+                                    );
+                                  })}
+                              </Fragment>
+                            );
+                          })}
+                      </Fragment>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={3} className="report-top-empty-cell">
+                      No hierarchy insights available for selected filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 
-        {reportData.hasEnrollmentData && (
-          <section className="report-section">
+        {hasRequiredEnrollmentColumns && reportData.hasEnrollmentData && (
+          <section className="report-section report-enrollment-section">
             <h3>📚 Enrollment Analytics</h3>
-            <div className="report-grid report-grid-3">
-              <div className="report-card">
-                <p>Total Enrollment 2024</p>
-                <strong>{formatNumber(enrollmentDistrictRows.reduce((sum, row) => sum + row.enrollment2024, 0))}</strong>
-              </div>
-              <div className="report-card">
-                <p>Total Enrollment 2025</p>
-                <strong>{formatNumber(enrollmentDistrictRows.reduce((sum, row) => sum + row.enrollment2025, 0))}</strong>
-              </div>
-              <div className="report-card">
-                <p>Districts with Data</p>
-                <strong>{formatNumber(enrollmentDistrictRows.length)}</strong>
-              </div>
-            </div>
+            <p className="report-muted report-enrollment-intro">
+              Review enrollment insights step-by-step with comparison, growth, and district-level details.
+            </p>
 
-            <div className="report-chart-grid">
-              <div className="report-chart-card">
-                <h4>Enrollment 2024 vs 2025 by District</h4>
-                <Bar
-                  data={{
-                    labels: enrollmentDistrictRows.map((row) => row.district),
-                    datasets: [
-                      {
-                        label: 'Enrollment 2024',
-                        data: enrollmentDistrictRows.map((row) => row.enrollment2024),
-                        backgroundColor: 'rgba(79, 172, 254, 0.8)',
-                      },
-                      {
-                        label: 'Enrollment 2025',
-                        data: enrollmentDistrictRows.map((row) => row.enrollment2025),
-                        backgroundColor: 'rgba(66, 230, 149, 0.8)',
-                      },
-                    ],
-                  }}
-                  options={{ responsive: true, maintainAspectRatio: false }}
-                />
-              </div>
-              <div className="report-chart-card">
-                <h4>Enrollment Growth (%) by District</h4>
-                <Bar
-                  data={{
-                    labels: enrollmentDistrictRows.map((row) => row.district),
-                    datasets: [
-                      {
-                        label: 'Growth %',
-                        data: enrollmentDistrictRows.map((row) => row.growth),
-                        backgroundColor: enrollmentDistrictRows.map((row) =>
-                          row.growth >= 0 ? 'rgba(66, 230, 149, 0.8)' : 'rgba(255, 107, 107, 0.8)'
-                        ),
-                      },
-                    ],
-                  }}
-                  options={{ responsive: true, maintainAspectRatio: false }}
-                />
-              </div>
-            </div>
+            <div className="report-enrollment-steps">
+              <section className="report-enrollment-step">
+                <div className="report-enrollment-step-header">
+                  <h4>Enrollment Comparison</h4>
+                  <p>Compare 2024 and 2025 totals along with district-wise distribution.</p>
+                </div>
 
-            <div className="report-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>District</th>
-                    <th>Enrollment 2024</th>
-                    <th>Enrollment 2025</th>
-                    <th>Difference</th>
-                    <th>Growth %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {enrollmentDistrictRows
-                    .sort((a, b) => b.enrollment2025 - a.enrollment2025)
-                    .map((row) => (
-                      <tr key={row.district}>
-                        <td>{row.district}</td>
-                        <td>{formatNumber(row.enrollment2024)}</td>
-                        <td>{formatNumber(row.enrollment2025)}</td>
-                        <td>{formatNumber(row.difference)}</td>
-                        <td>{row.growth.toFixed(2)}%</td>
+                <div className="report-grid report-grid-3 report-enrollment-summary-grid">
+                  <div className="report-card">
+                    <p>Total Enrollment 2024</p>
+                    <strong>{formatNumber(enrollmentSummary.enrollment2024)}</strong>
+                  </div>
+                  <div className="report-card">
+                    <p>Total Enrollment 2025</p>
+                    <strong>{formatNumber(enrollmentSummary.enrollment2025)}</strong>
+                  </div>
+                  <div className="report-card">
+                    <p>Districts with Data</p>
+                    <strong>{formatNumber(enrollmentSummary.districtCount)}</strong>
+                  </div>
+                </div>
+
+                <div className="report-chart-card report-enrollment-chart-card">
+                  <h4>Enrollment 2024 vs 2025 by District</h4>
+                  <Bar
+                    data={{
+                      labels: enrollmentDistrictRowsSorted.map((row) => row.district),
+                      datasets: [
+                        {
+                          label: 'Enrollment 2024',
+                          data: enrollmentDistrictRowsSorted.map((row) => row.enrollment2024),
+                          backgroundColor: 'rgba(79, 172, 254, 0.8)',
+                        },
+                        {
+                          label: 'Enrollment 2025',
+                          data: enrollmentDistrictRowsSorted.map((row) => row.enrollment2025),
+                          backgroundColor: 'rgba(66, 230, 149, 0.8)',
+                        },
+                      ],
+                    }}
+                    options={{ responsive: true, maintainAspectRatio: false }}
+                  />
+                </div>
+              </section>
+
+              <section className="report-enrollment-step">
+                <div className="report-enrollment-step-header">
+                  <h4>Enrollment Growth</h4>
+                  <p>Inspect district-level growth percentage between 2024 and 2025.</p>
+                </div>
+
+                <div className="report-chart-card report-enrollment-chart-card">
+                  <h4>Enrollment Growth (%) by District</h4>
+                  <Bar
+                    data={{
+                      labels: enrollmentDistrictRowsSorted.map((row) => row.district),
+                      datasets: [
+                        {
+                          label: 'Growth %',
+                          data: enrollmentDistrictRowsSorted.map((row) => row.growth),
+                          backgroundColor: enrollmentDistrictRowsSorted.map((row) =>
+                            row.growth >= 0 ? 'rgba(66, 230, 149, 0.8)' : 'rgba(255, 107, 107, 0.8)'
+                          ),
+                        },
+                      ],
+                    }}
+                    options={{ responsive: true, maintainAspectRatio: false }}
+                  />
+                </div>
+              </section>
+
+              <section className="report-enrollment-step">
+                <div className="report-enrollment-step-header">
+                  <h4>District Data Table</h4>
+                  <p>View district totals, differences, and growth values in tabular form.</p>
+                </div>
+
+                <div className="report-table-wrap report-enrollment-table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>District</th>
+                        <th>Enrollment 2024</th>
+                        <th>Enrollment 2025</th>
+                        <th>Difference</th>
+                        <th>Growth %</th>
                       </tr>
-                    ))}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {enrollmentDistrictRowsSorted.map((row) => (
+                        <tr key={row.district}>
+                          <td>{row.district}</td>
+                          <td>{formatNumber(row.enrollment2024)}</td>
+                          <td>{formatNumber(row.enrollment2025)}</td>
+                          <td>{formatNumber(row.difference)}</td>
+                          <td>{row.growth.toFixed(2)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </div>
           </section>
         )}
