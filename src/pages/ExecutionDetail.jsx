@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertCircle, FileSearch, FileText, Pencil, RefreshCw } from 'lucide-react';
+import { AlertCircle, Download, FileSearch, FileText, Loader2, Pencil, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { executionService, getApiErrorMessage } from '../services/executionService';
+import { executionService, getApiErrorMessage, reportService } from '../services/executionService';
 import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
 
 const PREVIEW_LIMIT = 10;
@@ -37,7 +37,9 @@ const ExecutionDetail = () => {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [downloadingReport, setDownloadingReport] = useState(false);
   const [error, setError] = useState('');
+  const [downloadError, setDownloadError] = useState('');
 
   const [execution, setExecution] = useState(null);
   const [statusInfo, setStatusInfo] = useState(null);
@@ -113,6 +115,35 @@ const ExecutionDetail = () => {
     void loadExecutionView({ showFullLoader: true });
   }, [loadExecutionView]);
 
+  useEffect(() => {
+    if (!executionId || loading) {
+      return undefined;
+    }
+
+    const statusGroup = getAnalysisStatusGroup(statusInfo?.status || execution?.status);
+    if (statusGroup === 'completed' || statusGroup === 'failed') {
+      return undefined;
+    }
+
+    const pollTimer = setInterval(() => {
+      void (async () => {
+        try {
+          const latestStatus = await executionService.getExecutionStatus(executionId);
+          setStatusInfo(latestStatus);
+
+          if (getAnalysisStatusGroup(latestStatus?.status) === 'completed') {
+            const latestExecution = await executionService.getExecution(executionId);
+            setExecution(latestExecution);
+          }
+        } catch (requestError) {
+          // Silent poll failure; explicit refresh button remains available.
+        }
+      })();
+    }, 10000);
+
+    return () => clearInterval(pollTimer);
+  }, [execution?.status, executionId, loading, statusInfo?.status]);
+
   const statusMeta = useMemo(() => getAnalysisStatusMeta(statusInfo?.status || execution?.status), [execution?.status, statusInfo?.status]);
 
   const progressPercent = useMemo(() => {
@@ -148,6 +179,23 @@ const ExecutionDetail = () => {
     ],
     [execution]
   );
+
+  const handleDownloadReport = useCallback(async () => {
+    if (!execution?.id) {
+      return;
+    }
+
+    setDownloadError('');
+    setDownloadingReport(true);
+
+    try {
+      await reportService.downloadReport(execution.id, 'csv');
+    } catch (requestError) {
+      setDownloadError(getApiErrorMessage(requestError, 'Failed to download report CSV.'));
+    } finally {
+      setDownloadingReport(false);
+    }
+  }, [execution?.id]);
 
   const renderPreviewSection = (title, fileType) => {
     const previewData = previews[fileType];
@@ -284,14 +332,30 @@ const ExecutionDetail = () => {
 
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {canViewReport ? (
-            <Button
-              type="button"
-              className="bg-blue-600 text-white hover:bg-blue-700"
-              onClick={() => navigate(`/reports/${execution.id}`)}
-            >
-              <FileText className="mr-1.5 h-4 w-4" />
-              View Report
-            </Button>
+            <>
+              <Button
+                type="button"
+                className="bg-blue-600 text-white hover:bg-blue-700"
+                onClick={() => navigate(`/reports/${execution.id}`)}
+              >
+                <FileText className="mr-1.5 h-4 w-4" />
+                View Report
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                onClick={() => void handleDownloadReport()}
+                disabled={downloadingReport}
+              >
+                {downloadingReport ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-1.5 h-4 w-4" />
+                )}
+                {downloadingReport ? 'Downloading...' : 'Download'}
+              </Button>
+            </>
           ) : null}
 
           {canEdit ? (
@@ -318,6 +382,13 @@ const ExecutionDetail = () => {
           </Button>
         </div>
       </div>
+
+      {downloadError ? (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <span className="font-semibold">Download error: </span>
+          {downloadError}
+        </div>
+      ) : null}
 
       {/* Combined Overview Card */}
       <Card className="border-slate-200 shadow-sm">

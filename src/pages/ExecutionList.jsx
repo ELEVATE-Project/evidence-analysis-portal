@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, FileText, Filter, Pencil, PlayCircle, RefreshCw, Search } from 'lucide-react';
-import { entityService, executionService, getApiErrorMessage } from '../services/executionService';
+import { Download, Eye, FileText, Filter, Loader2, Pencil, PlayCircle, RefreshCw, Search } from 'lucide-react';
+import { entityService, executionService, getApiErrorMessage, reportService } from '../services/executionService';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -29,6 +29,8 @@ const ExecutionList = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloadError, setDownloadError] = useState('');
+  const [downloadingExecutionId, setDownloadingExecutionId] = useState('');
   const [analyses, setAnalyses] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -226,6 +228,23 @@ const ExecutionList = () => {
     setCurrentPage(1);
   };
 
+  const handleDownloadReport = async (executionId) => {
+    if (!executionId) {
+      return;
+    }
+
+    setDownloadError('');
+    setDownloadingExecutionId(executionId);
+
+    try {
+      await reportService.downloadReport(executionId, 'csv');
+    } catch (requestError) {
+      setDownloadError(getApiErrorMessage(requestError, 'Failed to download report CSV.'));
+    } finally {
+      setDownloadingExecutionId('');
+    }
+  };
+
   const districtFilterDisabled = filters.state === 'all' || districtsLoading;
 
   return (
@@ -367,6 +386,12 @@ const ExecutionList = () => {
               {error}
             </div>
           )}
+          {downloadError && (
+            <div className="mx-4 mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              <span className="font-semibold">Download error: </span>
+              {downloadError}
+            </div>
+          )}
 
           {loading ? (
             <div className="space-y-2 p-4">
@@ -444,14 +469,30 @@ const ExecutionList = () => {
                               )}
 
                               {getAnalysisStatusGroup(analysis.status) === 'completed' && (
-                                <Button
-                                  type="button"
-                                  className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
-                                  onClick={() => navigate(`/reports/${analysis.id}`)}
-                                >
-                                  <FileText className="mr-1.5 h-3.5 w-3.5" />
-                                  View Report
-                                </Button>
+                                <>
+                                  <Button
+                                    type="button"
+                                    className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
+                                    onClick={() => navigate(`/reports/${analysis.id}`)}
+                                  >
+                                    <FileText className="mr-1.5 h-3.5 w-3.5" />
+                                    View Report
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-8 border-blue-300 px-3 text-xs text-blue-700 hover:bg-blue-50"
+                                    onClick={() => void handleDownloadReport(analysis.id)}
+                                    disabled={Boolean(downloadingExecutionId)}
+                                  >
+                                    {downloadingExecutionId === analysis.id ? (
+                                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <Download className="mr-1.5 h-3.5 w-3.5" />
+                                    )}
+                                    {downloadingExecutionId === analysis.id ? 'Downloading...' : 'Download'}
+                                  </Button>
+                                </>
                               )}
                             </div>
                           </td>
@@ -500,11 +541,11 @@ const ExecutionList = () => {
                         {formatDateTime(analysis.created_at)}
                       </div>
 
-                      <div className="flex gap-2 pt-1">
+                      <div className="flex flex-wrap gap-2 pt-1">
                         <Button
                           type="button"
                           variant="outline"
-                          className="flex-1 h-9 border-slate-300 text-xs text-slate-700 hover:bg-slate-100"
+                          className="flex-1 min-w-[110px] h-9 border-slate-300 text-xs text-slate-700 hover:bg-slate-100"
                           onClick={() => navigate(`/executions/${analysis.id}`)}
                         >
                           <Eye className="mr-1.5 h-3.5 w-3.5" />
@@ -515,7 +556,7 @@ const ExecutionList = () => {
                           <Button
                             type="button"
                             variant="outline"
-                            className="flex-1 h-9 border-blue-300 text-xs text-blue-700 hover:bg-blue-50"
+                            className="flex-1 min-w-[110px] h-9 border-blue-300 text-xs text-blue-700 hover:bg-blue-50"
                             onClick={() => navigate(`/executions/create?executionId=${analysis.id}`)}
                           >
                             <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -524,14 +565,30 @@ const ExecutionList = () => {
                         )}
 
                         {getAnalysisStatusGroup(analysis.status) === 'completed' && (
-                          <Button
-                            type="button"
-                            className="flex-1 h-9 bg-blue-600 text-xs text-white hover:bg-blue-700"
-                            onClick={() => navigate(`/reports/${analysis.id}`)}
-                          >
-                            <FileText className="mr-1.5 h-3.5 w-3.5" />
-                            Report
-                          </Button>
+                          <>
+                            <Button
+                              type="button"
+                              className="flex-1 min-w-[110px] h-9 bg-blue-600 text-xs text-white hover:bg-blue-700"
+                              onClick={() => navigate(`/reports/${analysis.id}`)}
+                            >
+                              <FileText className="mr-1.5 h-3.5 w-3.5" />
+                              Report
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="flex-1 min-w-[110px] h-9 border-blue-300 text-xs text-blue-700 hover:bg-blue-50"
+                              onClick={() => void handleDownloadReport(analysis.id)}
+                              disabled={Boolean(downloadingExecutionId)}
+                            >
+                              {downloadingExecutionId === analysis.id ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Download className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              {downloadingExecutionId === analysis.id ? 'Downloading...' : 'Download'}
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
