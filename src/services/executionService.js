@@ -199,7 +199,54 @@ export const getApiErrorMessage = (error, fallbackMessage = 'Request failed.') =
   return fallbackMessage;
 };
 
+const buildDownloadErrorMessage = (error, fallbackMessage) => {
+  const rawResponseData = error?.response?.data;
+
+  if (typeof rawResponseData === 'string' && rawResponseData.trim()) {
+    const responseText = rawResponseData.trim();
+
+    try {
+      const parsed = JSON.parse(responseText);
+      if (typeof parsed?.detail === 'string' && parsed.detail.trim()) {
+        return parsed.detail.trim();
+      }
+      if (typeof parsed?.message === 'string' && parsed.message.trim()) {
+        return parsed.message.trim();
+      }
+    } catch (parseError) {
+      // Non-JSON text response; return short plain text as-is.
+      if (!responseText.startsWith('<')) {
+        return responseText;
+      }
+    }
+  }
+
+  return getApiErrorMessage(error, fallbackMessage);
+};
+
+const triggerBrowserDownload = (blob, filename) => {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.setAttribute('download', filename);
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+};
+
 export const executionService = {
+  // Validate evidence criteria against an evidence image URL
+  validateCriteria: async ({ evidence_url, evidence_criteria, prompt = null }) => {
+    const payload = {
+      evidence_url,
+      evidence_criteria,
+      prompt,
+    };
+    const response = await apiClient.post('/criteria/validate', payload);
+    return response.data;
+  },
+
   // Step 1: Create analysis draft
   createExecutionDraft: async ({
     name,
@@ -429,28 +476,42 @@ export const reportService = {
     return response.data;
   },
 
+  // Get validated CSV content for report rendering
+  getReportCsv: async (executionId) => {
+    const response = await apiClient.get(`/reports/${executionId}/csv`, {
+      responseType: 'text',
+    });
+    return response.data;
+  },
+
   // Get HTML report
   getHtmlReport: async (executionId) => {
     const response = await apiClient.get(`/reports/${executionId}/html`);
     return response.data;
   },
 
-  // Download report using short-lived signed URL
+  // Download report CSV via backend and save locally
   downloadReport: async (executionId, format = 'csv') => {
-    const response = await apiClient.get(`/reports/${executionId}/download`, {
-      params: { format },
-    });
-
-    const signedUrl = response?.data?.download_url;
-    if (!signedUrl) {
-      throw new Error('Signed download URL is missing.');
+    if (format !== 'csv') {
+      throw new Error(`Unsupported format: ${format}`);
     }
 
-    const link = document.createElement('a');
-    link.href = signedUrl;
-    link.setAttribute('download', `execution_${executionId}_report.${format}`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    try {
+      const response = await apiClient.get(`/reports/${executionId}/csv`, {
+        responseType: 'text',
+      });
+
+      const csvText = typeof response?.data === 'string' ? response.data : '';
+      if (!csvText.trim()) {
+        throw new Error('Downloaded report is empty.');
+      }
+
+      triggerBrowserDownload(
+        new Blob([csvText], { type: 'text/csv;charset=utf-8;' }),
+        `execution_${executionId}_output.csv`
+      );
+    } catch (error) {
+      throw new Error(buildDownloadErrorMessage(error, 'Failed to download report CSV.'));
+    }
   },
 };

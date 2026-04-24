@@ -83,8 +83,8 @@ const ExecutionUpload = () => {
 
     setQuestionsFileState((current) => ({
       ...current,
-      existingFileName: extractDisplayFileName(execution?.questions_file_url, 'questions'),
-      existingUploaded: Boolean(execution?.questions_file_url) || Boolean(questionsStatus.uploaded),
+      existingFileName: extractDisplayFileName(execution?.criterias_file_url || execution?.questions_file_url, 'questions'),
+      existingUploaded: Boolean(execution?.criterias_file_url || execution?.questions_file_url) || Boolean(questionsStatus.uploaded),
       existingValidated: Boolean(questionsStatus.validated),
       rowsDetected: typeof questionsStatus.rows_detected === 'number' ? questionsStatus.rows_detected : null,
       columnsDetected: Array.isArray(questionsStatus.columns_detected) ? questionsStatus.columns_detected : [],
@@ -131,7 +131,9 @@ const ExecutionUpload = () => {
       rowsDetected: null,
       columnsDetected: [],
       error: '',
-      message: selectedFile ? `Replacement selected: ${selectedFile.name}` : '',
+      message: selectedFile
+        ? `${current.existingUploaded ? 'Replacement selected' : 'Selected'}: ${selectedFile.name}`
+        : '',
     }));
     setGlobalError('');
     setGlobalSuccess('');
@@ -312,13 +314,9 @@ const ExecutionUpload = () => {
     }
   };
 
-  const renderExistingFileStatus = (fileState, fileTypeLabel) => {
+  const renderExistingFileStatus = (fileState) => {
     if (!fileState.existingUploaded) {
-      return (
-        <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
-          No existing {fileTypeLabel.toLowerCase()} found. Please upload one to continue.
-        </div>
-      );
+      return null;
     }
 
     return (
@@ -347,7 +345,7 @@ const ExecutionUpload = () => {
 
   const renderFileStatus = (fileState, fileTypeLabel) => (
     <div className="space-y-2 text-xs">
-      {renderExistingFileStatus(fileState, fileTypeLabel)}
+      {renderExistingFileStatus(fileState)}
 
       {fileState.uploaded && (
         <div className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">
@@ -441,7 +439,7 @@ const ExecutionUpload = () => {
 
                 <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
                   <Label htmlFor="questionsFile" className="text-slate-700">
-                    Upload Criteria / Questions CSV
+                    Upload Criteria CSV
                   </Label>
                   <Input
                     id="questionsFile"

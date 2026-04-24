@@ -38,7 +38,7 @@ const ExecutionValidate = () => {
       if (result?.is_valid) {
         setGlobalSuccess('Both files are valid. You can start analysis or save as draft.');
       } else {
-        setGlobalError('Validation found issues. Please fix the highlighted file and re-upload.');
+        setGlobalError('');
       }
     } catch (error) {
       const message = error?.response?.data?.detail || error?.message || 'Validation failed.';
@@ -57,7 +57,7 @@ const ExecutionValidate = () => {
     const resultExecutionId = `${routeValidationResult?.execution_id || ''}`.trim();
     if (routeValidationResult && resultExecutionId === executionId) {
       setValidationResult(routeValidationResult);
-      setGlobalError(routeValidationResult?.is_valid ? '' : 'Validation found issues. Please fix the highlighted file and re-upload.');
+      setGlobalError('');
       setGlobalSuccess(routeValidationResult?.is_valid ? 'Both files are valid. You can start analysis or save as draft.' : '');
       return;
     }
@@ -115,8 +115,16 @@ const ExecutionValidate = () => {
           </span>
         </div>
 
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-          <p className="text-xs sm:text-sm text-slate-700">{fileResult?.message || 'No validation details available yet.'}</p>
+        <div
+          className={`rounded-md border px-3 py-2 ${
+            isValid
+              ? 'border-slate-200 bg-slate-50'
+              : 'border-rose-200 bg-rose-50'
+          }`}
+        >
+          <p className={`text-xs sm:text-sm ${isValid ? 'text-slate-700' : 'text-rose-700'}`}>
+            {fileResult?.message || 'No validation details available yet.'}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
@@ -237,34 +245,17 @@ const ExecutionValidate = () => {
 
             {validationResult && (
               <div className="space-y-3">
-                <div
-                  className={`rounded border px-3 py-2 text-sm ${
-                    validationResult.is_valid
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                      : 'border-rose-200 bg-rose-50 text-rose-700'
-                  }`}
-                >
-                  {validationResult.is_valid ? 'Both files passed validation.' : 'Validation failed for one or more files.'}
-                </div>
+                {validationResult.is_valid && (
+                  <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                    Both files passed validation.
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   {renderCsvPreviewSection(validationResult?.input_file, 'Input Data CSV')}
                   {renderCsvPreviewSection(validationResult?.questions_file, 'Criteria / Questions CSV')}
                 </div>
 
-                {!validationResult.is_valid && (
-                  <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    <p>Please fix the highlighted issue and re-upload the affected file.</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="mt-2 border-amber-300 text-amber-800 hover:bg-amber-100"
-                      onClick={() => navigate(`/executions/create/upload?executionId=${executionId}`)}
-                    >
-                      Go To Upload Section
-                    </Button>
-                  </div>
-                )}
               </div>
             )}
 
