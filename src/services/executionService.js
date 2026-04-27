@@ -467,6 +467,11 @@ export const configService = {
     const items = parseConfigResponse(response.data, 'project CSV source types');
     return items.map((item, index) => normalizeSourceTypeItem(item, index));
   },
+
+  getSampleCsvUrl: async (typeId, fileType) => {
+    const response = await apiClient.get(`/config/csv-source-types/${typeId}/sample/${fileType}`);
+    return response.data;
+  },
 };
 
 export const reportService = {

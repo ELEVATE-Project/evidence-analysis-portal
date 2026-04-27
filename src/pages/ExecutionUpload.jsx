@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, CheckCircle2, FileText, RefreshCw, UploadCloud, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Download, FileText, RefreshCw, UploadCloud, XCircle } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { executionService, getApiErrorMessage } from '../services/executionService';
+import { executionService, configService, getApiErrorMessage } from '../services/executionService';
+import { ENV } from '../config/env';
 import ExecutionWizardStepper from '../components/executions/ExecutionWizardStepper';
 
 const initialFileState = {
@@ -42,6 +43,8 @@ const ExecutionUpload = () => {
   const [loadingExecution, setLoadingExecution] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [executionStatus, setExecutionStatus] = useState('');
+  const [csvTypeId, setCsvTypeId] = useState(null);
+  const [downloadingSample, setDownloadingSample] = useState({ input: false, criteria: false });
   const [inputFileState, setInputFileState] = useState(initialFileState);
   const [questionsFileState, setQuestionsFileState] = useState(initialFileState);
 
@@ -112,6 +115,7 @@ const ExecutionUpload = () => {
         const execution = await executionService.getExecution(executionId);
         const normalizedStatus = `${execution?.status || ''}`.toLowerCase();
         setExecutionStatus(normalizedStatus);
+        setCsvTypeId(execution?.csv_type_id || null);
         hydrateExistingFiles(execution);
 
         if (!['draft', 'validated'].includes(normalizedStatus)) {
@@ -144,6 +148,34 @@ const ExecutionUpload = () => {
     }));
     setGlobalError('');
     setGlobalSuccess('');
+  };
+
+  const handleDownloadSample = async (fileType) => {
+    setDownloadingSample((prev) => ({ ...prev, [fileType]: true }));
+    setGlobalError('');
+
+    try {
+      // Use csvTypeId from execution or fall back to default
+      const typeId = csvTypeId || ENV.DEFAULT_CSV_TYPE_ID;
+      
+      // If typeId is still a string (like 'project_report'), we need the numeric ID
+      // For now, we'll use 1 as the default ID for project_report type
+      const numericTypeId = typeof typeId === 'number' ? typeId : 1;
+      
+      const response = await configService.getSampleCsvUrl(numericTypeId, fileType);
+      
+      if (response?.download_url) {
+        // Open the signed URL in a new tab to trigger download
+        window.open(response.download_url, '_blank');
+      } else {
+        throw new Error('Download URL not available');
+      }
+    } catch (error) {
+      const message = getApiErrorMessage(error, `Failed to download sample ${fileType} CSV.`);
+      setGlobalError(message);
+    } finally {
+      setDownloadingSample((prev) => ({ ...prev, [fileType]: false }));
+    }
   };
 
   const uploadSelectedFiles = async () => {
@@ -483,7 +515,20 @@ const ExecutionUpload = () => {
                         <Label htmlFor="inputFile" className="text-base font-semibold text-slate-900">
                           Input Data CSV
                         </Label>
-                        <p className="text-xs text-slate-500">Upload evidence data file</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-500">Upload evidence data file</p>
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            onClick={() => handleDownloadSample('input')}
+                            disabled={downloadingSample.input || isUploadingAny}
+                            className="h-auto px-2 py-1 text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            <Download className="mr-1 h-3 w-3" />
+                            {downloadingSample.input ? 'Downloading...' : 'Download Sample'}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                     <Input
@@ -509,7 +554,20 @@ const ExecutionUpload = () => {
                         <Label htmlFor="questionsFile" className="text-base font-semibold text-slate-900">
                           Criteria CSV
                         </Label>
-                        <p className="text-xs text-slate-500">Upload questions/criteria file</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-500">Upload questions/criteria file</p>
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            onClick={() => handleDownloadSample('criteria')}
+                            disabled={downloadingSample.criteria || isUploadingAny}
+                            className="h-auto px-2 py-1 text-xs text-purple-600 hover:text-purple-800"
+                          >
+                            <Download className="mr-1 h-3 w-3" />
+                            {downloadingSample.criteria ? 'Downloading...' : 'Download Sample'}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                     <Input
