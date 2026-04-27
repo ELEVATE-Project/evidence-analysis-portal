@@ -281,7 +281,7 @@ const ExecutionCreate = () => {
 
           <div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-slate-900">
-              {isEditMode ? 'Edit Analysis Setup' : 'Create Analysis Setup'}
+              {isEditMode ? 'Edit Analysis' : 'Create Analysis'}
             </h2>
           </div>
 

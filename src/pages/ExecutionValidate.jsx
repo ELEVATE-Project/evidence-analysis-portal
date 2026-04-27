@@ -35,11 +35,7 @@ const ExecutionValidate = () => {
     try {
       const result = await executionService.validateExecutionFiles(executionId);
       setValidationResult(result);
-      if (result?.is_valid) {
-        setGlobalSuccess('Both files are valid. You can start analysis or save as draft.');
-      } else {
-        setGlobalError('');
-      }
+      // Success message shown in the detailed banner above
     } catch (error) {
       const message = error?.response?.data?.detail || error?.message || 'Validation failed.';
       setGlobalError(typeof message === 'string' ? message : 'Validation failed.');
@@ -58,7 +54,7 @@ const ExecutionValidate = () => {
     if (routeValidationResult && resultExecutionId === executionId) {
       setValidationResult(routeValidationResult);
       setGlobalError('');
-      setGlobalSuccess(routeValidationResult?.is_valid ? 'Both files are valid. You can start analysis or save as draft.' : '');
+      // Success message shown in the detailed banner above
       return;
     }
 
@@ -116,15 +112,24 @@ const ExecutionValidate = () => {
         </div>
 
         <div
-          className={`rounded-md border px-3 py-2 ${
+          className={`rounded-md border px-4 py-3 ${
             isValid
-              ? 'border-slate-200 bg-slate-50'
+              ? 'border-emerald-300 bg-emerald-50'
               : 'border-rose-200 bg-rose-50'
           }`}
         >
-          <p className={`text-xs sm:text-sm ${isValid ? 'text-slate-700' : 'text-rose-700'}`}>
-            {fileResult?.message || 'No validation details available yet.'}
-          </p>
+          <div className="flex items-start gap-2">
+            {isValid ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+            )}
+            <p className={`text-sm font-medium ${
+              isValid ? 'text-emerald-800' : 'text-rose-700'
+            }`}>
+              {fileResult?.message || 'No validation details available yet.'}
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
@@ -246,8 +251,14 @@ const ExecutionValidate = () => {
             {validationResult && (
               <div className="space-y-3">
                 {validationResult.is_valid && (
-                  <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                    Both files passed validation.
+                  <div className="flex items-start gap-3 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-900">Validation Successful!</p>
+                      <p className="text-sm text-emerald-700 mt-0.5">
+                        Both files have been validated and are ready for processing. You can now start the analysis or save as draft.
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -307,8 +318,9 @@ const ExecutionValidate = () => {
           )}
 
           {globalSuccess && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              {globalSuccess}
+            <div className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span className="font-medium">{globalSuccess}</span>
             </div>
           )}
         </CardContent>
