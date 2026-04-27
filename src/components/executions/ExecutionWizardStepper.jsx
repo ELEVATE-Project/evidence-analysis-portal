@@ -4,8 +4,7 @@ import { Lock } from 'lucide-react';
 const STEPS = [
   { id: 1, label: 'Create' },
   { id: 2, label: 'Upload' },
-  { id: 3, label: 'Validate' },
-  { id: 4, label: 'Run' },
+  { id: 3, label: 'Validate & Run' },
 ];
 
 const ExecutionWizardStepper = ({ activeStep = 1 }) => {

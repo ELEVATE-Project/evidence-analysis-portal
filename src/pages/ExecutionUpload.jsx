@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, RefreshCw, UploadCloud, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, FileText, RefreshCw, UploadCloud, XCircle } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -48,6 +48,7 @@ const ExecutionUpload = () => {
   const hasAnyFileSelected = Boolean(inputFileState.file) || Boolean(questionsFileState.file);
   const hasInputAvailable = Boolean(inputFileState.file) || inputFileState.existingUploaded;
   const hasQuestionsAvailable = Boolean(questionsFileState.file) || questionsFileState.existingUploaded;
+  const hasExistingFiles = inputFileState.existingUploaded && questionsFileState.existingUploaded;
   const isUploadingAny = inputFileState.uploading || questionsFileState.uploading || submitting;
   const isEditableExecution = useMemo(() => {
     const normalizedStatus = `${executionStatus || ''}`.toLowerCase();
@@ -61,8 +62,14 @@ const ExecutionUpload = () => {
     if (submitting) {
       return hasAnyFileSelected ? 'Uploading & Validating...' : 'Validating...';
     }
-    return hasAnyFileSelected ? 'Upload Selected & Validate' : 'Continue with Existing Files';
-  }, [hasAnyFileSelected, submitting]);
+    if (hasAnyFileSelected) {
+      return 'Upload & Validate';
+    }
+    if (hasExistingFiles) {
+      return 'Continue with Existing Files';
+    }
+    return 'Upload & Validate';
+  }, [hasAnyFileSelected, hasExistingFiles, submitting]);
 
   const createStepPath = executionId ? `/executions/create?executionId=${executionId}` : '/executions/create';
 
@@ -320,23 +327,36 @@ const ExecutionUpload = () => {
     }
 
     return (
-      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">
-        <div>
-          <span className="font-medium text-slate-800">Current file:</span>{' '}
-          {fileState.existingFileName || 'Already uploaded'}
+      <div className="rounded-lg border-2 border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="mb-2">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Current file:</span>
+          <p className="mt-1 text-sm font-medium text-slate-900 break-all">
+            {fileState.existingFileName || 'Already uploaded'}
+          </p>
         </div>
-        <div className="mt-1 flex flex-wrap gap-2">
-          <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
+        <div className="mt-2 flex flex-wrap gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+            <CheckCircle2 className="h-3 w-3" />
             Uploaded
           </span>
           <span
-            className={`rounded border px-2 py-0.5 text-[11px] ${
+            className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${
               fileState.existingValidated
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-amber-200 bg-amber-50 text-amber-800'
+                : 'border-amber-200 bg-amber-50 text-amber-700'
             }`}
           >
-            {fileState.existingValidated ? 'Validated' : 'Not validated'}
+            {fileState.existingValidated ? (
+              <>
+                <CheckCircle2 className="h-3 w-3" />
+                Validated
+              </>
+            ) : (
+              <>
+                <AlertCircle className="h-3 w-3" />
+                Not validated
+              </>
+            )}
           </span>
         </div>
       </div>
@@ -344,36 +364,51 @@ const ExecutionUpload = () => {
   };
 
   const renderFileStatus = (fileState, fileTypeLabel) => (
-    <div className="space-y-2 text-xs">
+    <div className="space-y-3">
       {renderExistingFileStatus(fileState)}
 
       {fileState.uploaded && (
-        <div className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">
-          <div className="flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            <span>{fileState.message || `${fileTypeLabel} uploaded and validated`}</span>
-          </div>
-          {typeof fileState.rowsDetected === 'number' && <div className="mt-1">Rows detected: {fileState.rowsDetected}</div>}
-          {fileState.columnsDetected.length > 0 && (
-            <div className="mt-1 max-h-20 overflow-auto">
-              <span className="font-medium">Columns: </span>
-              {fileState.columnsDetected.join(', ')}
+        <div className="rounded-lg border-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 px-4 py-3 shadow-sm">
+          <div className="flex items-start gap-2">
+            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-white">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             </div>
-          )}
+            <div className="flex-1">
+              <p className="text-sm font-medium text-emerald-900">
+                {fileState.message || `${fileTypeLabel} uploaded and validated`}
+              </p>
+              {typeof fileState.rowsDetected === 'number' && (
+                <p className="mt-1.5 text-xs text-emerald-700">
+                  <span className="font-medium">Rows detected:</span> <span className="font-mono">{fileState.rowsDetected.toLocaleString()}</span>
+                </p>
+              )}
+              {fileState.columnsDetected.length > 0 && (
+                <div className="mt-1.5 max-h-24 overflow-auto text-xs text-emerald-700">
+                  <span className="font-medium">Columns ({fileState.columnsDetected.length}):</span>{' '}
+                  <span className="font-mono">{fileState.columnsDetected.join(', ')}</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
       {fileState.message && !fileState.uploaded && !fileState.error && (
-        <div className="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700">
-          <span>{fileState.message}</span>
+        <div className="rounded-lg border-2 border-blue-200 bg-blue-50 px-4 py-3 shadow-sm">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-blue-600" />
+            <p className="text-sm text-blue-900">{fileState.message}</p>
+          </div>
         </div>
       )}
 
       {fileState.error && (
-        <div className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-rose-700">
-          <div className="flex items-start gap-1">
-            <XCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-            <span className="break-words">{fileState.error}</span>
+        <div className="rounded-lg border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 px-4 py-3 shadow-sm">
+          <div className="flex items-start gap-2">
+            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-white">
+              <XCircle className="h-4 w-4 text-rose-600" />
+            </div>
+            <p className="text-sm text-rose-900 break-words">{fileState.error}</p>
           </div>
         </div>
       )}
@@ -382,15 +417,30 @@ const ExecutionUpload = () => {
 
   if (!executionId) {
     return (
-      <div className="mx-auto max-w-5xl">
-        <Card className="border-slate-200 bg-white shadow-sm">
-          <CardContent className="space-y-4 p-6">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        <Card className="border-2 border-slate-200 bg-white shadow-md">
+          <CardContent className="space-y-6 p-8">
             <ExecutionWizardStepper activeStep={2} />
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              Missing execution id. Please complete Step 1 first.
-            </div>
+            <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
+                    <AlertCircle className="h-5 w-5 text-rose-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-rose-900">Missing Execution ID</h4>
+                    <p className="mt-1 text-sm text-rose-700">Please complete Step 1 first to create an execution.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
             <div>
-              <Button type="button" onClick={() => navigate('/executions/create')}>
+              <Button 
+                type="button" 
+                onClick={() => navigate('/executions/create')}
+                className="bg-blue-600 text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
                 Go To Create
               </Button>
             </div>
@@ -401,96 +451,148 @@ const ExecutionUpload = () => {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <Card className="border-slate-200 bg-white shadow-sm">
-        <CardContent className="space-y-6 p-6">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+      <Card className="border-2 border-slate-200 bg-white shadow-md">
+        <CardContent className="space-y-8 p-8">
           <ExecutionWizardStepper activeStep={2} />
 
-          <div>
-            <h2 className="text-4xl font-semibold text-slate-900">Upload Files</h2>
+          <div className="border-b border-slate-200 pb-6">
+            <h2 className="text-3xl font-bold text-slate-900">Upload Files</h2>
+            <p className="mt-2 text-sm text-slate-600">Upload your input data and criteria files to proceed with validation</p>
           </div>
 
           {loadingExecution ? (
-            <div className="rounded-md border border-slate-200 p-8">
-              <div className="flex items-center justify-center gap-3">
-                <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
-                <span className="text-sm text-slate-600">Loading execution files...</span>
-              </div>
-            </div>
+            <Card className="border-2 border-slate-200">
+              <CardContent className="p-12">
+                <div className="flex items-center justify-center gap-3">
+                  <RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
+                  <span className="text-base text-slate-600">Loading execution files...</span>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
-            <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-5">
-              <h3 className="text-sm font-semibold text-slate-800">Step 2: Upload Files</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
-                  <Label htmlFor="inputFile" className="text-slate-700">
-                    Upload Input Data CSV
-                  </Label>
-                  <Input
-                    id="inputFile"
-                    name="inputFile"
-                    type="file"
-                    accept=".csv"
-                    disabled={inputFileState.uploading || submitting}
-                    onChange={(event) => handleFileSelection('input', event)}
-                    className="border-slate-300 bg-white text-slate-800 file:cursor-pointer"
-                  />
-                  {renderFileStatus(inputFileState, 'Input file')}
-                </div>
+            <div className="space-y-6">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card className="border-2 border-slate-200 shadow-sm transition-shadow hover:shadow-md">
+                  <CardContent className="space-y-4 p-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-50 to-blue-100">
+                        <FileText className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <Label htmlFor="inputFile" className="text-base font-semibold text-slate-900">
+                          Input Data CSV
+                        </Label>
+                        <p className="text-xs text-slate-500">Upload evidence data file</p>
+                      </div>
+                    </div>
+                    <Input
+                      id="inputFile"
+                      name="inputFile"
+                      type="file"
+                      accept=".csv"
+                      disabled={inputFileState.uploading || submitting}
+                      onChange={(event) => handleFileSelection('input', event)}
+                      className="!h-auto cursor-pointer border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 transition-all hover:border-blue-400 focus-visible:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:!bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:!text-white file:shadow-sm file:transition-all hover:file:!bg-blue-700 hover:file:shadow-md"
+                    />
+                    {renderFileStatus(inputFileState, 'Input file')}
+                  </CardContent>
+                </Card>
 
-                <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
-                  <Label htmlFor="questionsFile" className="text-slate-700">
-                    Upload Criteria CSV
-                  </Label>
-                  <Input
-                    id="questionsFile"
-                    name="questionsFile"
-                    type="file"
-                    accept=".csv"
-                    disabled={questionsFileState.uploading || submitting}
-                    onChange={(event) => handleFileSelection('questions', event)}
-                    className="border-slate-300 bg-white text-slate-800 file:cursor-pointer"
-                  />
-                  {renderFileStatus(questionsFileState, 'Criteria file')}
-                </div>
+                <Card className="border-2 border-slate-200 shadow-sm transition-shadow hover:shadow-md">
+                  <CardContent className="space-y-4 p-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-50 to-purple-100">
+                        <FileText className="h-6 w-6 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <Label htmlFor="questionsFile" className="text-base font-semibold text-slate-900">
+                          Criteria CSV
+                        </Label>
+                        <p className="text-xs text-slate-500">Upload questions/criteria file</p>
+                      </div>
+                    </div>
+                    <Input
+                      id="questionsFile"
+                      name="questionsFile"
+                      type="file"
+                      accept=".csv"
+                      disabled={questionsFileState.uploading || submitting}
+                      onChange={(event) => handleFileSelection('questions', event)}
+                      className="!h-auto cursor-pointer border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 transition-all hover:border-purple-400 focus-visible:border-purple-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:!bg-purple-600 file:px-4 file:py-2 file:text-sm file:font-medium file:!text-white file:shadow-sm file:transition-all hover:file:!bg-purple-700 hover:file:shadow-md"
+                    />
+                    {renderFileStatus(questionsFileState, 'Criteria file')}
+                  </CardContent>
+                </Card>
               </div>
 
-              <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-                <Button type="button" variant="outline" onClick={() => navigate(createStepPath)}>
-                  Back
-                </Button>
-                <Button
-                  type="button"
-                  className="bg-blue-600 text-white hover:bg-blue-700"
-                  disabled={loadingExecution || isUploadingAny || !hasInputAvailable || !hasQuestionsAvailable || !isEditableExecution}
-                  onClick={() => void handleProceed()}
-                >
-                  {isUploadingAny ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      {actionLabel}
-                    </>
-                  ) : (
-                    <>
-                      <UploadCloud className="mr-2 h-4 w-4" />
-                      {actionLabel}
-                    </>
-                  )}
-                </Button>
-              </div>
+              <Card className="border-2 border-slate-200 bg-slate-50">
+                <CardContent className="p-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="default"
+                      onClick={() => navigate(createStepPath)}
+                      className="w-full text-sm font-medium shadow-sm transition-all hover:shadow sm:w-auto"
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button
+                      type="button"
+                      size="default"
+                      className="w-full bg-blue-600 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md sm:w-auto"
+                      disabled={loadingExecution || isUploadingAny || !hasInputAvailable || !hasQuestionsAvailable || !isEditableExecution}
+                      onClick={() => void handleProceed()}
+                    >
+                      {isUploadingAny ? (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          {actionLabel}
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="mr-2 h-4 w-4" />
+                          {actionLabel}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
 
           {globalError && (
-            <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{globalError}</span>
-            </div>
+            <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
+                    <AlertCircle className="h-5 w-5 text-rose-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-rose-900">Error</h4>
+                    <p className="mt-1 text-sm text-rose-700">{globalError}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {globalSuccess && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              {globalSuccess}
-            </div>
+            <Card className="border-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-emerald-900">{globalSuccess}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </CardContent>
       </Card>
