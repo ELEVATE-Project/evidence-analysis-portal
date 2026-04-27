@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Download, FileSearch, FileText, Loader2, Pencil, RefreshCw, RotateCcw } from 'lucide-react';
+import { Download, FileSearch, /* FileText, */ Loader2, Pencil, RefreshCw, RotateCcw } from 'lucide-react'; // FileText unused - View Report button hidden for demo
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { executionService, getApiErrorMessage, reportService } from '../services/executionService';

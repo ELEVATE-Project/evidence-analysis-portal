@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { AlertCircle, FileUp } from 'lucide-react';
+import { AlertCircle, FileUp, Sparkles } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import StandardReportRenderer from '../components/reports/StandardReportRenderer';
 
 const ReportsList = () => {
+  // Hidden for demo - show "Coming Soon" message
+  const DEMO_MODE = true;
+
   const [selectedFileName, setSelectedFileName] = useState('');
   const [csvText, setCsvText] = useState('');
   const [error, setError] = useState('');
@@ -43,6 +46,23 @@ const ReportsList = () => {
       setLoading(false);
     }
   };
+
+  // Demo mode: Show "Coming Soon" message
+  if (DEMO_MODE) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="border-slate-200 shadow-sm max-w-md w-full">
+          <CardContent className="p-8 text-center">
+            <Sparkles className="h-16 w-16 mx-auto mb-4 text-blue-500" />
+            <h2 className="text-2xl font-semibold text-slate-800 mb-2">Coming Soon</h2>
+            <p className="text-slate-600">
+              The View Reports feature will be available soon. Stay tuned!
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

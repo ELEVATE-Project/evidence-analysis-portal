@@ -34,6 +34,9 @@ const getRelevanceBadgeClass = (relevanceTag) => {
 };
 
 const InteractiveTesting = () => {
+  // Hidden for demo - show "Coming Soon" message
+  const DEMO_MODE = true;
+
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [criteriaInputs, setCriteriaInputs] = useState([{ id: 1, value: '' }]);
@@ -144,6 +147,23 @@ const InteractiveTesting = () => {
       setSubmitting(false);
     }
   };
+
+  // Demo mode: Show "Coming Soon" message
+  if (DEMO_MODE) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="border-slate-200 shadow-sm max-w-md w-full">
+          <CardContent className="p-8 text-center">
+            <Sparkles className="h-16 w-16 mx-auto mb-4 text-blue-500" />
+            <h2 className="text-2xl font-semibold text-slate-800 mb-2">Coming Soon</h2>
+            <p className="text-slate-600">
+              The Validate Criteria feature will be available soon. Stay tuned!
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
