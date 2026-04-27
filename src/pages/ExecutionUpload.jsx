@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, CheckCircle2, FileText, RefreshCw, UploadCloud, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Download, FileText, RefreshCw, UploadCloud, XCircle } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { executionService, getApiErrorMessage } from '../services/executionService';
+import { executionService, configService, getApiErrorMessage } from '../services/executionService';
+import { ENV } from '../config/env';
 import ExecutionWizardStepper from '../components/executions/ExecutionWizardStepper';
 
 const initialFileState = {
@@ -42,6 +43,8 @@ const ExecutionUpload = () => {
   const [loadingExecution, setLoadingExecution] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [executionStatus, setExecutionStatus] = useState('');
+  const [csvTypeId, setCsvTypeId] = useState(null);
+  const [downloadingSample, setDownloadingSample] = useState({ input: false, criteria: false });
   const [inputFileState, setInputFileState] = useState(initialFileState);
   const [questionsFileState, setQuestionsFileState] = useState(initialFileState);
 
@@ -112,6 +115,7 @@ const ExecutionUpload = () => {
         const execution = await executionService.getExecution(executionId);
         const normalizedStatus = `${execution?.status || ''}`.toLowerCase();
         setExecutionStatus(normalizedStatus);
+        setCsvTypeId(execution?.csv_type_id || null);
         hydrateExistingFiles(execution);
 
         if (!['draft', 'validated'].includes(normalizedStatus)) {
@@ -144,6 +148,34 @@ const ExecutionUpload = () => {
     }));
     setGlobalError('');
     setGlobalSuccess('');
+  };
+
+  const handleDownloadSample = async (fileType) => {
+    setDownloadingSample((prev) => ({ ...prev, [fileType]: true }));
+    setGlobalError('');
+
+    try {
+      // Use csvTypeId from execution or fall back to default
+      const typeId = csvTypeId || ENV.DEFAULT_CSV_TYPE_ID;
+      
+      // If typeId is still a string (like 'project_report'), we need the numeric ID
+      // For now, we'll use 1 as the default ID for project_report type
+      const numericTypeId = typeof typeId === 'number' ? typeId : 1;
+      
+      const response = await configService.getSampleCsvUrl(numericTypeId, fileType);
+      
+      if (response?.download_url) {
+        // Open the signed URL in a new tab to trigger download
+        window.open(response.download_url, '_blank');
+      } else {
+        throw new Error('Download URL not available');
+      }
+    } catch (error) {
+      const message = getApiErrorMessage(error, `Failed to download sample ${fileType} CSV.`);
+      setGlobalError(message);
+    } finally {
+      setDownloadingSample((prev) => ({ ...prev, [fileType]: false }));
+    }
   };
 
   const uploadSelectedFiles = async () => {
@@ -417,28 +449,19 @@ const ExecutionUpload = () => {
 
   if (!executionId) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <Card className="border-2 border-slate-200 bg-white shadow-md">
-          <CardContent className="space-y-6 p-8">
+      <div className="space-y-4 sm:space-y-6">
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="space-y-6 p-4 sm:p-6">
             <ExecutionWizardStepper activeStep={2} />
-            <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
-                    <AlertCircle className="h-5 w-5 text-rose-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-rose-900">Missing Execution ID</h4>
-                    <p className="mt-1 text-sm text-rose-700">Please complete Step 1 first to create an execution.</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+              <span className="font-semibold">Missing execution id. </span>
+              Please complete Step 1 first to create an execution.
+            </div>
             <div>
               <Button 
                 type="button" 
                 onClick={() => navigate('/executions/create')}
-                className="bg-blue-600 text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg"
+                className="bg-blue-600 text-white hover:bg-blue-700"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Go To Create
@@ -451,39 +474,48 @@ const ExecutionUpload = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-      <Card className="border-2 border-slate-200 bg-white shadow-md">
-        <CardContent className="space-y-8 p-8">
+    <div className="space-y-4 sm:space-y-6">
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="space-y-6 p-4 sm:p-6">
           <ExecutionWizardStepper activeStep={2} />
 
-          <div className="border-b border-slate-200 pb-6">
-            <h2 className="text-3xl font-bold text-slate-900">Upload Files</h2>
-            <p className="mt-2 text-sm text-slate-600">Upload your input data and criteria files to proceed with validation</p>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-semibold text-slate-800">Upload Files</h2>
+            <p className="mt-1 text-sm text-slate-600">Upload your input data and criteria files to proceed with validation</p>
           </div>
 
           {loadingExecution ? (
-            <Card className="border-2 border-slate-200">
-              <CardContent className="p-12">
-                <div className="flex items-center justify-center gap-3">
-                  <RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
-                  <span className="text-base text-slate-600">Loading execution files...</span>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-center justify-center rounded-md border border-slate-200 bg-slate-50 p-8">
+              <RefreshCw className="mr-2 h-5 w-5 animate-spin text-blue-600" />
+              <span className="text-sm text-slate-600">Loading execution files...</span>
+            </div>
           ) : (
             <div className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <Card className="border-2 border-slate-200 shadow-sm transition-shadow hover:shadow-md">
-                  <CardContent className="space-y-4 p-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
+                  <CardContent className="space-y-4 p-4 sm:p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-50 to-blue-100">
-                        <FileText className="h-6 w-6 text-blue-600" />
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-blue-50 border border-blue-100">
+                        <FileText className="h-5 w-5 text-blue-600" />
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="inputFile" className="text-base font-semibold text-slate-900">
+                        <Label htmlFor="inputFile" className="text-sm font-semibold text-slate-800">
                           Input Data CSV
                         </Label>
-                        <p className="text-xs text-slate-500">Upload evidence data file</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-500">Upload evidence data file</p>
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            onClick={() => handleDownloadSample('input')}
+                            disabled={downloadingSample.input || isUploadingAny}
+                            className="h-auto px-2 py-1 text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            <Download className="mr-1 h-3 w-3" />
+                            {downloadingSample.input ? 'Downloading...' : 'Download Sample'}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                     <Input
@@ -499,17 +531,30 @@ const ExecutionUpload = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="border-2 border-slate-200 shadow-sm transition-shadow hover:shadow-md">
-                  <CardContent className="space-y-4 p-6">
+                <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
+                  <CardContent className="space-y-4 p-4 sm:p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-50 to-purple-100">
-                        <FileText className="h-6 w-6 text-purple-600" />
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-purple-50 border border-purple-100">
+                        <FileText className="h-5 w-5 text-purple-600" />
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="questionsFile" className="text-base font-semibold text-slate-900">
+                        <Label htmlFor="questionsFile" className="text-sm font-semibold text-slate-800">
                           Criteria CSV
                         </Label>
-                        <p className="text-xs text-slate-500">Upload questions/criteria file</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-500">Upload questions/criteria file</p>
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            onClick={() => handleDownloadSample('criteria')}
+                            disabled={downloadingSample.criteria || isUploadingAny}
+                            className="h-auto px-2 py-1 text-xs text-purple-600 hover:text-purple-800"
+                          >
+                            <Download className="mr-1 h-3 w-3" />
+                            {downloadingSample.criteria ? 'Downloading...' : 'Download Sample'}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                     <Input
@@ -526,73 +571,50 @@ const ExecutionUpload = () => {
                 </Card>
               </div>
 
-              <Card className="border-2 border-slate-200 bg-slate-50">
-                <CardContent className="p-6">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="default"
-                      onClick={() => navigate(createStepPath)}
-                      className="w-full text-sm font-medium shadow-sm transition-all hover:shadow sm:w-auto"
-                    >
-                      <ArrowLeft className="mr-2 h-4 w-4" />
-                      Back
-                    </Button>
-                    <Button
-                      type="button"
-                      size="default"
-                      className="w-full bg-blue-600 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md sm:w-auto"
-                      disabled={loadingExecution || isUploadingAny || !hasInputAvailable || !hasQuestionsAvailable || !isEditableExecution}
-                      onClick={() => void handleProceed()}
-                    >
-                      {isUploadingAny ? (
-                        <>
-                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                          {actionLabel}
-                        </>
-                      ) : (
-                        <>
-                          <UploadCloud className="mr-2 h-4 w-4" />
-                          {actionLabel}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-md border border-slate-200 bg-slate-50 p-4">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => navigate(createStepPath)}
+                    className="w-full sm:w-auto border-slate-300 text-slate-700 hover:bg-slate-100"
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back
+                  </Button>
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700"
+                    disabled={loadingExecution || isUploadingAny || !hasInputAvailable || !hasQuestionsAvailable || !isEditableExecution}
+                    onClick={() => void handleProceed()}
+                  >
+                    {isUploadingAny ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        {actionLabel}
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud className="mr-2 h-4 w-4" />
+                        {actionLabel}
+                      </>
+                    )}
+                  </Button>
+                </div>
             </div>
           )}
 
           {globalError && (
-            <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
-                    <AlertCircle className="h-5 w-5 text-rose-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-rose-900">Error</h4>
-                    <p className="mt-1 text-sm text-rose-700">{globalError}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+              <span className="font-semibold">Error: </span>
+              {globalError}
+            </div>
           )}
 
           {globalSuccess && (
-            <Card className="border-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 shadow-md">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-emerald-900">{globalSuccess}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">
+              <span className="font-semibold">Success: </span>
+              {globalSuccess}
+            </div>
           )}
         </CardContent>
       </Card>

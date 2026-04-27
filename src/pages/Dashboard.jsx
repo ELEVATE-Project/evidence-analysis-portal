@@ -13,6 +13,7 @@ import {
   Pencil,
   PlayCircle,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
 import { entityService, executionService, getApiErrorMessage, reportService } from '../services/executionService';
 import { Button } from '../components/ui/button';
@@ -41,7 +42,10 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloadError, setDownloadError] = useState('');
+  const [rerunError, setRerunError] = useState('');
+  const [rerunSuccess, setRerunSuccess] = useState('');
   const [downloadingExecutionId, setDownloadingExecutionId] = useState('');
+  const [rerunningExecutionId, setRerunningExecutionId] = useState('');
   const [analyses, setAnalyses] = useState([]);
 
   const [states, setStates] = useState([]);
@@ -264,6 +268,25 @@ const Dashboard = () => {
     }
   };
 
+  const handleRerunExecution = async (executionId) => {
+    if (!executionId) {
+      return;
+    }
+
+    setRerunError('');
+    setRerunSuccess('');
+    setRerunningExecutionId(executionId);
+    try {
+      await executionService.rerunExecution(executionId);
+      setRerunSuccess('Rerun queued successfully. Processing has started.');
+      await loadAnalyses();
+    } catch (requestError) {
+      setRerunError(getApiErrorMessage(requestError, 'Failed to rerun analysis.'));
+    } finally {
+      setRerunningExecutionId('');
+    }
+  };
+
   const districtFilterDisabled = filters.state === 'all' || districtsLoading;
 
   return (
@@ -444,6 +467,18 @@ const Dashboard = () => {
               {downloadError}
             </div>
           )}
+          {rerunError && (
+            <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              <span className="font-semibold">Rerun error: </span>
+              {rerunError}
+            </div>
+          )}
+          {rerunSuccess && (
+            <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              <span className="font-semibold">Success: </span>
+              {rerunSuccess}
+            </div>
+          )}
 
           {loading ? (
             <div className="space-y-2">
@@ -474,6 +509,7 @@ const Dashboard = () => {
                   <tbody className="divide-y divide-slate-100">
                     {recentAnalyses.map((analysis) => {
                       const statusMeta = getAnalysisStatusMeta(analysis.status);
+                      const statusGroup = getAnalysisStatusGroup(analysis.status);
 
                       return (
                         <tr
@@ -508,7 +544,7 @@ const Dashboard = () => {
                                 View
                               </Button>
 
-                              {getAnalysisStatusGroup(analysis.status) === 'draft' && (
+                              {statusGroup === 'draft' && (
                                 <Button
                                   type="button"
                                   variant="outline"
@@ -520,7 +556,7 @@ const Dashboard = () => {
                                 </Button>
                               )}
 
-                              {getAnalysisStatusGroup(analysis.status) === 'completed' && (
+                              {statusGroup === 'completed' && (
                                 <>
                                   <Button
                                     type="button"
@@ -546,6 +582,22 @@ const Dashboard = () => {
                                   </Button>
                                 </>
                               )}
+
+                              {statusGroup === 'failed' && (
+                                <Button
+                                  type="button"
+                                  className="h-8 bg-amber-600 px-3 text-xs text-white hover:bg-amber-700"
+                                  onClick={() => void handleRerunExecution(analysis.id)}
+                                  disabled={Boolean(rerunningExecutionId)}
+                                >
+                                  {rerunningExecutionId === analysis.id ? (
+                                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                                  )}
+                                  {rerunningExecutionId === analysis.id ? 'Rerunning...' : 'Rerun'}
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -559,6 +611,7 @@ const Dashboard = () => {
               <div className="md:hidden divide-y divide-slate-200">
                 {recentAnalyses.map((analysis) => {
                   const statusMeta = getAnalysisStatusMeta(analysis.status);
+                  const statusGroup = getAnalysisStatusGroup(analysis.status);
 
                   return (
                     <div key={analysis.id} className="p-4 space-y-3 hover:bg-slate-50 transition-colors">
@@ -604,7 +657,7 @@ const Dashboard = () => {
                           View
                         </Button>
 
-                        {getAnalysisStatusGroup(analysis.status) === 'draft' && (
+                        {statusGroup === 'draft' && (
                           <Button
                             type="button"
                             variant="outline"
@@ -616,7 +669,7 @@ const Dashboard = () => {
                           </Button>
                         )}
 
-                        {getAnalysisStatusGroup(analysis.status) === 'completed' && (
+                        {statusGroup === 'completed' && (
                           <>
                             <Button
                               type="button"
@@ -641,6 +694,22 @@ const Dashboard = () => {
                               {downloadingExecutionId === analysis.id ? 'Downloading...' : 'Download'}
                             </Button>
                           </>
+                        )}
+
+                        {statusGroup === 'failed' && (
+                          <Button
+                            type="button"
+                            className="flex-1 min-w-[110px] h-9 bg-amber-600 text-xs text-white hover:bg-amber-700"
+                            onClick={() => void handleRerunExecution(analysis.id)}
+                            disabled={Boolean(rerunningExecutionId)}
+                          >
+                            {rerunningExecutionId === analysis.id ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            {rerunningExecutionId === analysis.id ? 'Rerunning...' : 'Rerun'}
+                          </Button>
                         )}
                       </div>
                     </div>
