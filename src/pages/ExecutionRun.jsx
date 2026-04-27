@@ -66,12 +66,13 @@ const ExecutionRun = () => {
 
   if (!executionId) {
     return (
-      <div className="mx-auto max-w-5xl">
-        <Card className="border-slate-200 bg-white shadow-sm">
-          <CardContent className="space-y-4 p-6">
+      <div className="space-y-4 sm:space-y-6">
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="space-y-6 p-4 sm:p-6">
             <ExecutionWizardStepper activeStep={4} />
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              Missing execution id. Please complete previous steps first.
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+              <span className="font-semibold">Missing execution id. </span>
+              Please complete previous steps first.
             </div>
             <div>
               <Button type="button" onClick={() => navigate('/executions/create')}>
@@ -85,13 +86,16 @@ const ExecutionRun = () => {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <Card className="border-slate-200 bg-white shadow-sm">
-        <CardContent className="space-y-6 p-6">
+    <div className="space-y-4 sm:space-y-6">
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="space-y-6 p-4 sm:p-6">
           <ExecutionWizardStepper activeStep={4} />
 
           <div>
-            <h2 className="text-4xl font-semibold text-slate-900">Run Analysis</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-slate-800">Run Analysis</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Review your execution details and start the analysis run when ready.
+            </p>
           </div>
 
           {loadingExecution ? (
@@ -100,44 +104,47 @@ const ExecutionRun = () => {
               <span className="text-sm text-slate-600">Loading execution details...</span>
             </div>
           ) : (
-            <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-5">
-              <h3 className="text-sm font-semibold text-slate-800">Step 4: Start Analysis</h3>
-              <p className="text-sm text-slate-600">
-                Your files should already be uploaded and validated. Start the run to begin processing.
-              </p>
+            <div className="space-y-4">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+                <h3 className="text-sm font-semibold text-slate-800 mb-3">Analysis Details</h3>
+                <p className="text-sm text-slate-600 mb-4">
+                  Your files should already be uploaded and validated. Start the run to begin processing.
+                </p>
 
-              {execution && (
-                <div className="rounded-md border border-slate-200 bg-white p-3 text-xs">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="font-medium text-slate-700">Analysis: </span>
-                      <span className="text-slate-600">{execution.name}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-slate-700">Status: </span>
-                      <span className={`capitalize ${
-                        execution.status === 'validated' ? 'text-emerald-600' :
-                        execution.status === 'draft' ? 'text-amber-600' :
-                        'text-slate-600'
-                      }`}>
-                        {execution.status}
-                      </span>
+                {execution && (
+                  <div className="rounded-md border border-slate-200 bg-white p-3 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <span className="font-medium text-slate-700">Analysis: </span>
+                        <span className="text-slate-600">{execution.name}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-slate-700">Status: </span>
+                        <span className={`capitalize ${
+                          execution.status === 'validated' ? 'text-emerald-600 font-medium' :
+                          execution.status === 'draft' ? 'text-amber-600 font-medium' :
+                          'text-slate-600'
+                        }`}>
+                          {execution.status}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
-              <div className="flex items-center justify-between border-t border-slate-200 pt-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 p-4">
                 <Button 
                   type="button" 
                   variant="outline" 
                   onClick={() => navigate(`/executions/create/upload?executionId=${executionId}`)}
+                  className="w-full sm:w-auto border-slate-300 text-slate-700 hover:bg-slate-100"
                 >
                   Back To Upload
                 </Button>
                 <Button
                   type="button"
-                  className="bg-blue-600 text-white hover:bg-blue-700"
+                  className="w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700"
                   disabled={startingAnalysis || execution?.status !== 'validated'}
                   onClick={() => void handleStartAnalysis()}
                 >
@@ -158,14 +165,15 @@ const ExecutionRun = () => {
           )}
 
           {globalError && (
-            <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{globalError}</span>
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+              <span className="font-semibold">Error: </span>
+              {globalError}
             </div>
           )}
 
           {globalSuccess && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">
+              <span className="font-semibold">Success: </span>
               {globalSuccess}
             </div>
           )}

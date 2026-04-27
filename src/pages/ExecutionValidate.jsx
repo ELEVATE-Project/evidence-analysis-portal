@@ -95,12 +95,12 @@ const ExecutionValidate = () => {
           ? 'border-emerald-200 bg-white hover:shadow-md' 
           : 'border-rose-200 bg-white'
       }`}>
-        <CardContent className="p-5 space-y-4">
+        <CardContent className="p-4 sm:p-5 space-y-4">
           {/* Header with title and status badge */}
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold text-slate-900">{sectionTitle}</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h3 className="text-base sm:text-lg font-semibold text-slate-800">{sectionTitle}</h3>
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold self-start ${
                 isValid
                   ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                   : 'bg-rose-100 text-rose-700 border border-rose-200'
@@ -113,93 +113,106 @@ const ExecutionValidate = () => {
 
           {/* Validation message */}
           <div
-            className={`rounded-lg border-2 p-4 ${
+            className={`rounded-md border px-3 py-2.5 text-sm ${
               isValid
-                ? 'border-emerald-200 bg-emerald-50/50'
-                : 'border-rose-200 bg-rose-50/50'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : 'border-rose-200 bg-rose-50 text-rose-800'
             }`}
           >
-            <div className="flex items-start gap-3">
-              {isValid ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-              )}
-              <p className={`text-sm font-medium leading-relaxed ${
-                isValid ? 'text-emerald-900' : 'text-rose-900'
-              }`}>
-                {fileResult?.message || 'No validation details available yet.'}
-              </p>
-            </div>
+            {fileResult?.message || 'No validation details available yet.'}
           </div>
 
           {/* File statistics */}
-          <div className="flex flex-wrap items-center gap-6 text-sm">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-900">Rows:</span>
-              <span className="font-mono text-blue-600">
+              <span className="font-medium text-slate-500">Rows:</span>
+              <span className="font-semibold text-blue-600">
                 {rowsDetected !== null ? rowsDetected.toLocaleString() : '-'}
               </span>
             </div>
+            <span className="text-slate-300">•</span>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-900">Columns:</span>
-              <span className="font-mono text-blue-600">{columns.length}</span>
+              <span className="font-medium text-slate-500">Columns:</span>
+              <span className="font-semibold text-blue-600">{columns.length}</span>
             </div>
           </div>
 
-          {/* CSV Preview Table */}
-          <div className="rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-slate-100 to-slate-50 border-b border-slate-200 px-4 py-3">
-              <p className="text-sm font-semibold text-slate-800">Data Preview (First 10 Rows)</p>
-            </div>
+          {/* Desktop CSV Preview Table */}
+          <div className="hidden md:block overflow-x-auto rounded-md border border-slate-200 bg-white">
             {columns.length > 0 ? (
-              <div className="overflow-x-auto bg-white">
-                <table className="min-w-full divide-y divide-slate-200">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 border-r border-slate-200">
-                        #
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-slate-50">
+                    <th className="sticky left-0 z-10 bg-slate-50 px-3 py-2.5 font-semibold border-r border-slate-200">
+                      #
+                    </th>
+                    {columns.map((column) => (
+                      <th
+                        key={`${sectionTitle}-head-${column}`}
+                        className="px-3 py-2.5 font-semibold whitespace-nowrap"
+                      >
+                        {column}
                       </th>
-                      {columns.map((column) => (
-                        <th
-                          key={`${sectionTitle}-head-${column}`}
-                          className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 whitespace-nowrap"
-                        >
-                          {column}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {previewRows.length > 0 ? (
-                      previewRows.map((row, rowIndex) => (
-                        <tr key={`${sectionTitle}-row-${rowIndex}`} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="sticky left-0 z-10 bg-white px-4 py-3 text-xs font-medium text-slate-500 border-r border-slate-200 group-hover:bg-slate-50/50">
-                            {rowIndex + 1}
-                          </td>
-                          {columns.map((column) => (
-                            <td
-                              key={`${sectionTitle}-cell-${rowIndex}-${column}`}
-                              className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap min-w-[160px]"
-                            >
-                              {row?.[column] || <span className="text-slate-400">-</span>}
-                            </td>
-                          ))}
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={columns.length + 1} className="px-4 py-8 text-center text-sm text-slate-500">
-                          No sample data rows available.
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {previewRows.length > 0 ? (
+                    previewRows.map((row, rowIndex) => (
+                      <tr key={`${sectionTitle}-row-${rowIndex}`} className="hover:bg-slate-50 transition-colors duration-150">
+                        <td className="sticky left-0 z-10 bg-white px-3 py-2.5 text-slate-500 font-medium border-r border-slate-200 hover:bg-slate-50 transition-colors">
+                          {rowIndex + 1}
                         </td>
+                        {columns.map((column) => (
+                          <td
+                            key={`${sectionTitle}-cell-${rowIndex}-${column}`}
+                            className="px-3 py-2.5 text-slate-700 whitespace-nowrap min-w-[140px]"
+                          >
+                            {row?.[column] || <span className="text-slate-400">-</span>}
+                          </td>
+                        ))}
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={columns.length + 1} className="px-3 py-8 text-center text-sm text-slate-500">
+                        No sample data rows available.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             ) : (
-              <div className="px-4 py-8 text-center text-sm text-slate-500 bg-white">
+              <div className="px-3 py-8 text-center text-sm text-slate-500">
                 Preview unavailable until a valid header row is detected.
+              </div>
+            )}
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-3">
+            {columns.length > 0 && previewRows.length > 0 ? (
+              previewRows.map((row, rowIndex) => (
+                <div
+                  key={`${sectionTitle}-mobile-row-${rowIndex}`}
+                  className="rounded-md border border-slate-200 bg-white p-3 space-y-2 hover:bg-slate-50 transition-colors duration-150"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-xs font-semibold text-slate-800">Row {rowIndex + 1}</span>
+                  </div>
+                  {columns.map((column) => (
+                    <div key={`${sectionTitle}-mobile-cell-${rowIndex}-${column}`} className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-500">{column}</span>
+                      <span className="text-sm text-slate-700 break-words">{row?.[column] || '-'}</span>
+                    </div>
+                  ))}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                <p className="text-sm text-slate-500">
+                  {columns.length === 0 ? 'Preview unavailable until a valid header row is detected.' : 'No sample data rows available.'}
+                </p>
               </div>
             )}
           </div>
@@ -210,21 +223,14 @@ const ExecutionValidate = () => {
 
   if (!executionId) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="space-y-4 sm:space-y-6">
         <Card className="border-slate-200 shadow-sm">
-          <CardContent className="p-6 space-y-5">
+          <CardContent className="space-y-6 p-4 sm:p-6">
             <ExecutionWizardStepper activeStep={3} />
             
-            <div className="rounded-lg border-2 border-rose-200 bg-rose-50 p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-rose-900">Missing Execution ID</p>
-                  <p className="text-sm text-rose-700 mt-1">
-                    Please complete the previous steps first to continue with validation.
-                  </p>
-                </div>
-              </div>
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+              <span className="font-semibold">Missing execution id. </span>
+              Please complete the previous steps first to continue with validation.
             </div>
             
             <div>
@@ -244,15 +250,15 @@ const ExecutionValidate = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header Section */}
       <Card className="border-slate-200 shadow-sm">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <ExecutionWizardStepper activeStep={3} />
           
           <div className="mt-6">
-            <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Validate & Run</h1>
-            <p className="mt-2 text-sm text-slate-600">
+            <h2 className="text-xl sm:text-2xl font-semibold text-slate-800">Validate & Run</h2>
+            <p className="mt-1 text-sm text-slate-600">
               Review and validate your uploaded files, then start the analysis when ready.
             </p>
           </div>
@@ -260,18 +266,18 @@ const ExecutionValidate = () => {
       </Card>
 
       {/* Validation Action Section */}
-      <Card className="border-slate-200 shadow-sm">
-        <CardContent className="p-6 space-y-5">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">File Validation</h2>
+      <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
+        <CardContent className="space-y-5 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-200">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-slate-800">File Validation</h3>
               <p className="text-sm text-slate-600 mt-0.5">
                 Click the button below to validate your uploaded files
               </p>
             </div>
             <Button
               type="button"
-              className="bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+              className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
               disabled={validationRunning || startingAnalysis}
               onClick={() => void runValidation(true)}
             >
@@ -291,18 +297,9 @@ const ExecutionValidate = () => {
 
           {/* Success Banner */}
           {validationResult?.is_valid && (
-            <div className="rounded-lg border-2 border-emerald-300 bg-gradient-to-r from-emerald-50 to-emerald-50/50 p-4 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="rounded-full bg-emerald-100 p-1">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-base font-semibold text-emerald-900">Validation Successful!</p>
-                  <p className="text-sm text-emerald-700 mt-1">
-                    Both files have been validated successfully and are ready for processing. You can now start the analysis or save as draft.
-                  </p>
-                </div>
-              </div>
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">
+              <span className="font-semibold">Validation successful! </span>
+              Both files have been validated successfully and are ready for processing. You can now start the analysis or save as draft.
             </div>
           )}
 
@@ -317,74 +314,62 @@ const ExecutionValidate = () => {
       </Card>
 
       {/* Actions Section */}
-      <Card className="border-2 border-slate-200 bg-slate-50 shadow-md">
-        <CardContent className="p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(`/executions/create/upload?executionId=${executionId}`)}
-              className="w-full border-slate-300 text-slate-700 shadow-sm transition-all hover:bg-slate-100 hover:shadow sm:w-auto"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Upload
-            </Button>
-            
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!canStartActions || validationRunning || startingAnalysis}
-                onClick={() => navigate('/executions')}
-                className="w-full border-slate-300 text-slate-700 shadow-sm transition-all hover:bg-slate-100 hover:shadow sm:w-auto"
-              >
-                <Save className="mr-2 h-4 w-4" />
-                Save as Draft
-              </Button>
-              <Button
-                type="button"
-                className="w-full bg-blue-600 text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg sm:w-auto"
-                disabled={!canStartActions || validationRunning || startingAnalysis}
-                onClick={() => void handleStartAnalysis()}
-              >
-                {startingAnalysis ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Starting...
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="mr-2 h-4 w-4" />
-                    Start Analysis
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:justify-between rounded-md border border-slate-200 bg-slate-50 p-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => navigate(`/executions/create/upload?executionId=${executionId}`)}
+          className="w-full sm:w-auto border-slate-300 text-slate-700 hover:bg-slate-100"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Upload
+        </Button>
+        
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!canStartActions || validationRunning || startingAnalysis}
+            onClick={() => navigate('/executions')}
+            className="w-full sm:w-auto border-slate-300 text-slate-700 hover:bg-slate-100"
+          >
+            <Save className="mr-2 h-4 w-4" />
+            Save as Draft
+          </Button>
+          <Button
+            type="button"
+            className="w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700"
+            disabled={!canStartActions || validationRunning || startingAnalysis}
+            onClick={() => void handleStartAnalysis()}
+          >
+            {startingAnalysis ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              <>
+                <PlayCircle className="mr-2 h-4 w-4" />
+                Start Analysis
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
 
       {/* Error and Success Messages */}
       {globalError && (
-        <Card className="border-2 border-rose-200 shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-              <p className="text-sm font-medium text-rose-900">{globalError}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+          <span className="font-semibold">Error: </span>
+          {globalError}
+        </div>
       )}
 
       {globalSuccess && (
-        <Card className="border-2 border-emerald-300 shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-              <p className="text-sm font-semibold text-emerald-900">{globalSuccess}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">
+          <span className="font-semibold">Success: </span>
+          {globalSuccess}
+        </div>
       )}
     </div>
   );

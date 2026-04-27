@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertCircle, Download, FileSearch, FileText, Loader2, Pencil, RefreshCw } from 'lucide-react';
+import { Download, FileSearch, FileText, Loader2, Pencil, RefreshCw, RotateCcw } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { executionService, getApiErrorMessage, reportService } from '../services/executionService';
@@ -38,8 +38,11 @@ const ExecutionDetail = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [downloadingReport, setDownloadingReport] = useState(false);
+  const [rerunning, setRerunning] = useState(false);
   const [error, setError] = useState('');
   const [downloadError, setDownloadError] = useState('');
+  const [rerunError, setRerunError] = useState('');
+  const [rerunSuccess, setRerunSuccess] = useState('');
 
   const [execution, setExecution] = useState(null);
   const [statusInfo, setStatusInfo] = useState(null);
@@ -168,6 +171,9 @@ const ExecutionDetail = () => {
   const canViewReport = useMemo(() => {
     return getAnalysisStatusGroup(statusInfo?.status || execution?.status) === 'completed';
   }, [execution?.status, statusInfo?.status]);
+  const canRerun = useMemo(() => {
+    return getAnalysisStatusGroup(statusInfo?.status || execution?.status) === 'failed';
+  }, [execution?.status, statusInfo?.status]);
 
   const quickDetails = useMemo(
     () => [
@@ -197,6 +203,25 @@ const ExecutionDetail = () => {
     }
   }, [execution?.id]);
 
+  const handleRerunExecution = useCallback(async () => {
+    if (!execution?.id) {
+      return;
+    }
+
+    setRerunError('');
+    setRerunSuccess('');
+    setRerunning(true);
+    try {
+      await executionService.rerunExecution(execution.id);
+      setRerunSuccess('Rerun queued successfully. Processing has started.');
+      await loadExecutionView({ showFullLoader: false });
+    } catch (requestError) {
+      setRerunError(getApiErrorMessage(requestError, 'Failed to rerun analysis.'));
+    } finally {
+      setRerunning(false);
+    }
+  }, [execution?.id, loadExecutionView]);
+
   const renderPreviewSection = (title, fileType) => {
     const previewData = previews[fileType];
     const previewError = previewErrors[fileType];
@@ -204,38 +229,41 @@ const ExecutionDetail = () => {
     const previewRows = Array.isArray(previewData?.preview_rows) ? previewData.preview_rows : [];
 
     return (
-      <section className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-base font-semibold text-slate-800">{title}</h4>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-slate-800">{title}</h4>
           <div className="flex items-center gap-3 text-xs text-slate-600">
-            <span>
-              <span className="font-medium">{formatValue(previewData?.rows_detected)}</span> rows
-            </span>
-            <span className="text-slate-400">•</span>
-            <span>
-              <span className="font-medium">{columns.length}</span> columns
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-slate-500">Rows:</span>
+              <span className="font-semibold text-blue-600">{formatValue(previewData?.rows_detected)}</span>
+            </div>
+            <span className="text-slate-300">•</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-slate-500">Columns:</span>
+              <span className="font-semibold text-blue-600">{columns.length}</span>
+            </div>
           </div>
         </div>
 
         {previewError ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             {previewError}
           </div>
         ) : null}
 
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto rounded-md border border-slate-200 bg-white">
           {columns.length > 0 ? (
-            <table className="min-w-max w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="sticky left-0 z-10 bg-slate-100 whitespace-nowrap px-4 py-3 text-left font-semibold text-slate-700">
+            <table className="min-w-full divide-y divide-slate-200 text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-slate-50">
+                  <th className="sticky left-0 z-10 bg-slate-50 px-3 py-2.5 font-semibold">
                     #
                   </th>
                   {columns.map((column) => (
                     <th
                       key={`${fileType}-col-${column}`}
-                      className="whitespace-nowrap px-4 py-3 text-left font-semibold text-slate-700"
+                      className="whitespace-nowrap bg-slate-50 px-3 py-2.5 font-semibold"
                     >
                       {column}
                     </th>
@@ -245,14 +273,14 @@ const ExecutionDetail = () => {
               <tbody className="divide-y divide-slate-100 bg-white">
                 {previewRows.length > 0 ? (
                   previewRows.map((row, rowIndex) => (
-                    <tr key={`${fileType}-row-${rowIndex}`} className="hover:bg-slate-50 transition-colors">
-                      <td className="sticky left-0 z-10 bg-white whitespace-nowrap px-4 py-3 text-slate-500 font-medium">
+                    <tr key={`${fileType}-row-${rowIndex}`} className="transition-colors duration-150 hover:bg-slate-50">
+                      <td className="sticky left-0 z-10 bg-white whitespace-nowrap px-3 py-2.5 text-slate-500 font-medium hover:bg-slate-50 transition-colors">
                         {rowIndex + 1}
                       </td>
                       {columns.map((column) => (
                         <td
                           key={`${fileType}-cell-${rowIndex}-${column}`}
-                          className="min-w-[140px] max-w-xs break-words px-4 py-3 text-slate-700"
+                          className="min-w-[140px] max-w-xs break-words px-3 py-2.5 text-slate-700"
                         >
                           {row?.[column] || '-'}
                         </td>
@@ -261,7 +289,7 @@ const ExecutionDetail = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={columns.length + 1} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={columns.length + 1} className="px-3 py-8 text-center text-sm text-slate-500">
                       No sample rows available
                     </td>
                   </tr>
@@ -269,37 +297,58 @@ const ExecutionDetail = () => {
               </tbody>
             </table>
           ) : (
-            <div className="px-4 py-8 text-center text-sm text-slate-500">
+            <div className="px-3 py-8 text-center text-sm text-slate-500">
               Preview unavailable
             </div>
           )}
         </div>
-      </section>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {columns.length > 0 && previewRows.length > 0 ? (
+            previewRows.map((row, rowIndex) => (
+              <div
+                key={`${fileType}-mobile-row-${rowIndex}`}
+                className="rounded-md border border-slate-200 bg-white p-3 space-y-2 hover:bg-slate-50 transition-colors duration-150"
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="text-xs font-semibold text-slate-800">Row {rowIndex + 1}</span>
+                </div>
+                {columns.map((column) => (
+                  <div key={`${fileType}-mobile-cell-${rowIndex}-${column}`} className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-slate-500">{column}</span>
+                    <span className="text-sm text-slate-700 break-words">{row?.[column] || '-'}</span>
+                  </div>
+                ))}
+              </div>
+            ))
+          ) : (
+            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+              <p className="text-sm text-slate-500">
+                {columns.length === 0 ? 'Preview unavailable' : 'No sample rows available'}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     );
   };
 
   if (!executionId) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
-                <AlertCircle className="h-5 w-5 text-rose-600" />
-              </div>
-              <p className="text-sm font-medium text-rose-900">Missing execution id in URL.</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <span className="font-semibold">Missing execution id in URL.</span>
+        </div>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="space-y-4 sm:space-y-6">
         {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="h-28 animate-pulse rounded-lg border-2 border-slate-200 bg-slate-100 shadow-sm" />
+          <div key={index} className="h-32 animate-pulse rounded-md border border-slate-200 bg-slate-100" />
         ))}
       </div>
     );
@@ -307,22 +356,20 @@ const ExecutionDetail = () => {
 
   if (error || !execution) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
-          <CardContent className="space-y-4 p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
-                <AlertCircle className="h-5 w-5 text-rose-600" />
-              </div>
-              <span className="font-medium text-rose-900">{error || 'Analysis details not available.'}</span>
+      <div className="space-y-4 sm:space-y-6">
+        <Card className="border-rose-200 bg-rose-50 shadow-sm">
+          <CardContent className="space-y-4 p-4 sm:p-6">
+            <div className="rounded-md border border-rose-200 bg-white px-3 py-2.5 text-sm text-rose-700">
+              <span className="font-semibold">Error: </span>
+              {error || 'Analysis details not available.'}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => navigate('/executions')}>
                 Back to Analyses
               </Button>
               <Button
                 type="button"
-                className="bg-blue-600 text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg"
+                className="bg-blue-600 text-white hover:bg-blue-700"
                 onClick={() => void loadExecutionView({ showFullLoader: true })}
               >
                 Retry
@@ -335,92 +382,115 @@ const ExecutionDetail = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      {/* Header with Title and Actions */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">{execution.name || 'Analysis Details'}</h2>
-          <p className="mt-1.5 text-sm text-slate-600">Track status and review uploaded data</p>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header Card */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-semibold text-slate-800">{execution.name || 'Analysis Details'}</h2>
+              <p className="mt-1 text-sm text-slate-600">Track status and review uploaded data</p>
+            </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          {canViewReport ? (
-            <>
-              <Button
-                type="button"
-                className="bg-blue-600 text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg"
-                onClick={() => navigate(`/reports/${execution.id}`)}
-              >
-                <FileText className="mr-1.5 h-4 w-4" />
-                View Report
-              </Button>
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full lg:w-auto lg:justify-end">
+              {canViewReport ? (
+                <>
+                  <Button
+                    type="button"
+                    className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
+                    onClick={() => navigate(`/reports/${execution.id}`)}
+                  >
+                    <FileText className="mr-1.5 h-4 w-4" />
+                    View Report
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50 w-full sm:w-auto"
+                    onClick={() => void handleDownloadReport()}
+                    disabled={downloadingReport}
+                  >
+                    {downloadingReport ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-1.5 h-4 w-4" />
+                    )}
+                    {downloadingReport ? 'Downloading...' : 'Download'}
+                  </Button>
+                </>
+              ) : null}
+
+              {canEdit ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-blue-300 text-blue-700 hover:bg-blue-50 w-full sm:w-auto"
+                  onClick={() => navigate(`/executions/create?executionId=${execution.id}`)}
+                >
+                  <Pencil className="mr-1.5 h-4 w-4" />
+                  Edit
+                </Button>
+              ) : null}
+
+              {canRerun ? (
+                <Button
+                  type="button"
+                  className="bg-amber-600 text-white hover:bg-amber-700 w-full sm:w-auto"
+                  onClick={() => void handleRerunExecution()}
+                  disabled={rerunning}
+                >
+                  {rerunning ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="mr-1.5 h-4 w-4" />
+                  )}
+                  {rerunning ? 'Rerunning...' : 'Rerun'}
+                </Button>
+              ) : null}
+
               <Button
                 type="button"
                 variant="outline"
-                className="border-blue-300 text-blue-700 shadow-sm transition-all hover:bg-blue-50 hover:shadow"
-                onClick={() => void handleDownloadReport()}
-                disabled={downloadingReport}
+                className="border-slate-300 text-slate-700 hover:bg-slate-100 w-full sm:w-auto"
+                onClick={() => void loadExecutionView({ showFullLoader: false })}
+                disabled={refreshing}
               >
-                {downloadingReport ? (
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="mr-1.5 h-4 w-4" />
-                )}
-                {downloadingReport ? 'Downloading...' : 'Download'}
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
               </Button>
-            </>
-          ) : null}
-
-          {canEdit ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="border-blue-300 text-blue-700 shadow-sm transition-all hover:bg-blue-50 hover:shadow"
-              onClick={() => navigate(`/executions/create?executionId=${execution.id}`)}
-            >
-              <Pencil className="mr-1.5 h-4 w-4" />
-              Edit
-            </Button>
-          ) : null}
-
-          <Button
-            type="button"
-            variant="outline"
-            className="border-slate-300 text-slate-700 shadow-sm transition-all hover:bg-slate-100 hover:shadow"
-            onClick={() => void loadExecutionView({ showFullLoader: false })}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
-      </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {downloadError ? (
-        <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-white">
-                <AlertCircle className="h-4 w-4 text-rose-600" />
-              </div>
-              <p className="text-sm text-rose-900">
-                <span className="font-semibold">Download error: </span>
-                {downloadError}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <span className="font-semibold">Download error: </span>
+          {downloadError}
+        </div>
+      ) : null}
+      {rerunError ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <span className="font-semibold">Rerun error: </span>
+          {rerunError}
+        </div>
+      ) : null}
+      {rerunSuccess ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          <span className="font-semibold">Success: </span>
+          {rerunSuccess}
+        </div>
       ) : null}
 
-      {/* Combined Overview Card */}
-      <Card className="border-2 border-slate-200 bg-white shadow-md">
-        <CardHeader className="border-b border-slate-200 pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-bold text-slate-900">Analysis Overview</CardTitle>
+      {/* Analysis Overview Card */}
+      <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
+        <CardHeader className="pb-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-lg text-slate-800">Analysis Overview</CardTitle>
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${statusMeta.badgeClass}`}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium self-start sm:self-auto ${statusMeta.badgeClass}`}
             >
-              <span className={`h-2 w-2 rounded-full ${statusMeta.dotClass}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} />
               {statusMeta.label}
             </span>
           </div>
@@ -428,29 +498,29 @@ const ExecutionDetail = () => {
         <CardContent className="space-y-6">
           {/* Progress Section */}
           <div>
-            <div className="mb-3 flex items-center justify-between text-sm">
+            <div className="mb-2 flex items-center justify-between text-sm">
               <span className="font-medium text-slate-700">Processing Progress</span>
-              <span className="text-slate-600">{formatPercent(progressPercent)}</span>
+              <span className="font-semibold text-slate-800">{formatPercent(progressPercent)}</span>
             </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
+                className="h-full rounded-full bg-blue-600 transition-all duration-300"
                 style={{ width: `${Math.max(0, Math.min(100, progressPercent || 0))}%` }}
               />
             </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-              <span>
-                {formatValue(statusInfo?.processed_rows ?? execution.processed_rows)} processed
+            <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+              <span className="font-medium">
+                <span className="text-blue-600 font-semibold">{formatValue(statusInfo?.processed_rows ?? execution.processed_rows)}</span> processed
               </span>
-              <span>
-                {formatValue(statusInfo?.total_rows ?? execution.total_rows)} total rows
+              <span className="font-medium">
+                <span className="text-blue-600 font-semibold">{formatValue(statusInfo?.total_rows ?? execution.total_rows)}</span> total
               </span>
             </div>
           </div>
 
           {/* Error Message if any */}
           {(statusInfo?.failure_reason || execution.failure_reason) && (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
               <span className="font-semibold">Error: </span>
               {statusInfo?.failure_reason || execution.failure_reason}
             </div>
@@ -458,12 +528,12 @@ const ExecutionDetail = () => {
 
           {/* Details Grid */}
           <div>
-            <h4 className="mb-3 text-sm font-semibold text-slate-700">Details</h4>
+            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Analysis Details</h4>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {quickDetails.map((field) => (
-                <div key={field.label} className="space-y-1">
+                <div key={field.label} className="space-y-1.5">
                   <p className="text-xs font-medium text-slate-500">{field.label}</p>
-                  <p className="break-words text-sm text-slate-900">{formatValue(field.value)}</p>
+                  <p className="break-words text-sm font-medium text-slate-800">{formatValue(field.value)}</p>
                 </div>
               ))}
             </div>
@@ -472,15 +542,15 @@ const ExecutionDetail = () => {
       </Card>
 
       {/* File Preview Card */}
-      <Card className="border-2 border-slate-200 bg-white shadow-md">
-        <CardHeader className="border-b border-slate-200 pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg font-bold text-slate-900">
+      <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
             <FileSearch className="h-5 w-5 text-blue-600" />
             Uploaded Files Preview
           </CardTitle>
-          <CardDescription className="text-slate-600">First {PREVIEW_LIMIT} rows from your uploaded data files</CardDescription>
+          <CardDescription>First {PREVIEW_LIMIT} rows from your uploaded data files</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-6">
           {renderPreviewSection('Input Data CSV', 'input')}
           {renderPreviewSection('Criteria / Questions CSV', 'questions')}
         </CardContent>

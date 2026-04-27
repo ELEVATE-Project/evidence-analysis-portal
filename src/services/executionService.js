@@ -350,6 +350,12 @@ export const executionService = {
     return response.data;
   },
 
+  // Rerun a failed analysis
+  rerunExecution: async (executionId) => {
+    const response = await apiClient.post(`/executions/${executionId}/rerun`);
+    return response.data;
+  },
+
   // Create execution with signed URL upload flow
   createExecution: async ({
     name,
