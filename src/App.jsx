@@ -11,7 +11,6 @@ import ExecutionList from './pages/ExecutionList';
 import ExecutionCreate from './pages/ExecutionCreate';
 import ExecutionUpload from './pages/ExecutionUpload';
 import ExecutionValidate from './pages/ExecutionValidate';
-import ExecutionRun from './pages/ExecutionRun';
 import ExecutionDetail from './pages/ExecutionDetail';
 import ReportView from './pages/ReportView';
 import ReportsList from './pages/ReportsList';
@@ -39,7 +38,6 @@ function App() {
                     <Route path="/executions/create" element={<ExecutionCreate />} />
                     <Route path="/executions/create/upload" element={<ExecutionUpload />} />
                     <Route path="/executions/create/validate" element={<ExecutionValidate />} />
-                    <Route path="/executions/create/run" element={<ExecutionRun />} />
                     <Route path="/executions/:id" element={<ExecutionDetail />} />
                     <Route path="/reports" element={<ReportsList />} />
                     <Route path="/reports/:id" element={<ReportView />} />

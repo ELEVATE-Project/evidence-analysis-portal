@@ -280,17 +280,26 @@ const ExecutionDetail = () => {
 
   if (!executionId) {
     return (
-      <Card className="border-rose-200 bg-rose-50 shadow-sm">
-        <CardContent className="p-6 text-sm text-rose-700">Missing execution id in URL.</CardContent>
-      </Card>
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
+                <AlertCircle className="h-5 w-5 text-rose-600" />
+              </div>
+              <p className="text-sm font-medium text-rose-900">Missing execution id in URL.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="space-y-4 px-4 sm:px-0">
+      <div className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
         {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="h-28 animate-pulse rounded-lg border border-slate-200 bg-slate-100" />
+          <div key={index} className="h-28 animate-pulse rounded-lg border-2 border-slate-200 bg-slate-100 shadow-sm" />
         ))}
       </div>
     );
@@ -298,31 +307,35 @@ const ExecutionDetail = () => {
 
   if (error || !execution) {
     return (
-      <Card className="border-rose-200 bg-rose-50 shadow-sm">
-        <CardContent className="space-y-4 p-6">
-          <div className="flex items-center gap-2 text-sm text-rose-700">
-            <AlertCircle className="h-4 w-4" />
-            <span>{error || 'Analysis details not available.'}</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => navigate('/executions')}>
-              Back to Analyses
-            </Button>
-            <Button
-              type="button"
-              className="bg-blue-600 text-white hover:bg-blue-700"
-              onClick={() => void loadExecutionView({ showFullLoader: true })}
-            >
-              Retry
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
+          <CardContent className="space-y-4 p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white">
+                <AlertCircle className="h-5 w-5 text-rose-600" />
+              </div>
+              <span className="font-medium text-rose-900">{error || 'Analysis details not available.'}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={() => navigate('/executions')}>
+                Back to Analyses
+              </Button>
+              <Button
+                type="button"
+                className="bg-blue-600 text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg"
+                onClick={() => void loadExecutionView({ showFullLoader: true })}
+              >
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-6 px-4 sm:px-0">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       {/* Header with Title and Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -335,7 +348,7 @@ const ExecutionDetail = () => {
             <>
               <Button
                 type="button"
-                className="bg-blue-600 text-white hover:bg-blue-700"
+                className="bg-blue-600 text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg"
                 onClick={() => navigate(`/reports/${execution.id}`)}
               >
                 <FileText className="mr-1.5 h-4 w-4" />
@@ -344,7 +357,7 @@ const ExecutionDetail = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                className="border-blue-300 text-blue-700 shadow-sm transition-all hover:bg-blue-50 hover:shadow"
                 onClick={() => void handleDownloadReport()}
                 disabled={downloadingReport}
               >
@@ -362,7 +375,7 @@ const ExecutionDetail = () => {
             <Button
               type="button"
               variant="outline"
-              className="border-blue-300 text-blue-700 hover:bg-blue-50"
+              className="border-blue-300 text-blue-700 shadow-sm transition-all hover:bg-blue-50 hover:shadow"
               onClick={() => navigate(`/executions/create?executionId=${execution.id}`)}
             >
               <Pencil className="mr-1.5 h-4 w-4" />
@@ -373,7 +386,7 @@ const ExecutionDetail = () => {
           <Button
             type="button"
             variant="outline"
-            className="border-slate-300 text-slate-700 hover:bg-slate-100"
+            className="border-slate-300 text-slate-700 shadow-sm transition-all hover:bg-slate-100 hover:shadow"
             onClick={() => void loadExecutionView({ showFullLoader: false })}
             disabled={refreshing}
           >
@@ -384,17 +397,26 @@ const ExecutionDetail = () => {
       </div>
 
       {downloadError ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          <span className="font-semibold">Download error: </span>
-          {downloadError}
-        </div>
+        <Card className="border-2 border-rose-200 bg-gradient-to-r from-rose-50 to-rose-100 shadow-md">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-white">
+                <AlertCircle className="h-4 w-4 text-rose-600" />
+              </div>
+              <p className="text-sm text-rose-900">
+                <span className="font-semibold">Download error: </span>
+                {downloadError}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       ) : null}
 
       {/* Combined Overview Card */}
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader className="pb-4">
+      <Card className="border-2 border-slate-200 bg-white shadow-md">
+        <CardHeader className="border-b border-slate-200 pb-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg text-slate-800">Analysis Overview</CardTitle>
+            <CardTitle className="text-lg font-bold text-slate-900">Analysis Overview</CardTitle>
             <span
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${statusMeta.badgeClass}`}
             >
@@ -450,13 +472,13 @@ const ExecutionDetail = () => {
       </Card>
 
       {/* File Preview Card */}
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
+      <Card className="border-2 border-slate-200 bg-white shadow-md">
+        <CardHeader className="border-b border-slate-200 pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg font-bold text-slate-900">
             <FileSearch className="h-5 w-5 text-blue-600" />
             Uploaded Files Preview
           </CardTitle>
-          <CardDescription>First {PREVIEW_LIMIT} rows from your uploaded data files</CardDescription>
+          <CardDescription className="text-slate-600">First {PREVIEW_LIMIT} rows from your uploaded data files</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {renderPreviewSection('Input Data CSV', 'input')}

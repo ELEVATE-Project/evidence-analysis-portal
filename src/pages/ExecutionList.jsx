@@ -248,18 +248,18 @@ const ExecutionList = () => {
   const districtFilterDisabled = filters.state === 'all' || districtsLoading;
 
   return (
-    <div className="space-y-6">
-      <Card className="border-slate-200 shadow-sm">
-        <CardContent className="p-4 sm:p-6">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <Card className="border-2 border-slate-200 bg-white shadow-md">
+        <CardContent className="p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-slate-800">View Analyses</h2>
+              <h2 className="text-2xl font-bold text-slate-900">View Analyses</h2>
               <p className="mt-1 text-sm text-slate-600">Browse and manage all your analysis runs.</p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+            <div className="flex flex-col gap-2 sm:flex-row sm:w-auto w-full">
               <Button
                 type="button"
-                className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
+                className="bg-blue-600 text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg w-full sm:w-auto"
                 onClick={() => navigate('/executions/create')}
               >
                 <PlayCircle className="mr-2 h-4 w-4" />
@@ -268,7 +268,7 @@ const ExecutionList = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="border-slate-300 text-slate-700 hover:bg-slate-100 w-full sm:w-auto"
+                className="border-slate-300 text-slate-700 shadow-sm transition-all hover:bg-slate-100 hover:shadow w-full sm:w-auto"
                 onClick={() => void loadAnalyses()}
                 disabled={loading}
               >
@@ -280,13 +280,13 @@ const ExecutionList = () => {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
-            <Filter className="h-4 w-4 text-blue-600" />
+      <Card className="border-2 border-slate-200 bg-white shadow-md">
+        <CardHeader className="border-b border-slate-200 pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg font-bold text-slate-900">
+            <Filter className="h-5 w-5 text-blue-600" />
             Filter Analyses
           </CardTitle>
-          <CardDescription>{totalItems} analyses match current filters.</CardDescription>
+          <CardDescription className="text-slate-600">{totalItems} analyses match current filters.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -306,12 +306,12 @@ const ExecutionList = () => {
 
             <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
               <label className="space-y-1 text-sm text-slate-700">
-                <span className="font-medium">Status</span>
+                <span className="font-medium text-slate-900">Status</span>
                 <select
                   name="status"
                   value={filters.status}
                   onChange={handleFilterChange}
-                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                  className="h-10 w-full rounded-md border-2 border-slate-300 bg-white px-3 text-sm text-slate-800 transition-colors hover:border-blue-400 focus:border-blue-500 focus:outline-none"
                 >
                   {STATUS_FILTER_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -322,12 +322,12 @@ const ExecutionList = () => {
               </label>
 
             <label className="space-y-1 text-sm text-slate-700">
-              <span className="font-medium">State</span>
+              <span className="font-medium text-slate-900">State</span>
               <select
                 name="state"
                 value={filters.state}
                 onChange={handleFilterChange}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                className="h-10 w-full rounded-md border-2 border-slate-300 bg-white px-3 text-sm text-slate-800 transition-colors hover:border-blue-400 focus:border-blue-500 focus:outline-none"
               >
                 <option value="all">{statesLoading ? 'Loading states...' : 'All States'}</option>
                 {stateOptions.map((stateOption) => (
@@ -340,13 +340,13 @@ const ExecutionList = () => {
             </label>
 
             <label className="space-y-1 text-sm text-slate-700">
-              <span className="font-medium">District</span>
+              <span className="font-medium text-slate-900">District</span>
               <select
                 name="district"
                 value={filters.district}
                 onChange={handleFilterChange}
                 disabled={districtFilterDisabled}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+                className="h-10 w-full rounded-md border-2 border-slate-300 bg-white px-3 text-sm text-slate-800 transition-colors hover:border-blue-400 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
               >
                 <option value="all">
                   {filters.state === 'all'
@@ -368,7 +368,7 @@ const ExecutionList = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="h-10 w-full border-slate-300 text-slate-700 hover:bg-slate-100"
+                className="h-10 w-full border-slate-300 text-slate-700 shadow-sm transition-all hover:bg-slate-100 hover:shadow"
                 onClick={clearFilters}
               >
                 Clear Filters
@@ -379,7 +379,7 @@ const ExecutionList = () => {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 shadow-sm">
+      <Card className="border-2 border-slate-200 bg-white shadow-md">
         <CardContent className="p-0">
           {error && (
             <div className="m-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">

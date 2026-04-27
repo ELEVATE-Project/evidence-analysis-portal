@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, PlayCircle, RefreshCw, Save, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, PlayCircle, RefreshCw, Save, XCircle } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { executionService } from '../services/executionService';
@@ -90,125 +90,151 @@ const ExecutionValidate = () => {
     const rowsDetected = typeof fileResult?.rows_detected === 'number' ? fileResult.rows_detected : null;
 
     return (
-      <section
-        className={`space-y-3 rounded-md border bg-white p-4 text-sm ${
-          isValid
-            ? 'border-emerald-200'
-            : 'border-rose-200'
-        }`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-base font-semibold text-slate-900">{sectionTitle}</h4>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${
+      <Card className={`border-2 shadow-sm transition-all duration-200 ${
+        isValid 
+          ? 'border-emerald-200 bg-white hover:shadow-md' 
+          : 'border-rose-200 bg-white'
+      }`}>
+        <CardContent className="p-5 space-y-4">
+          {/* Header with title and status badge */}
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold text-slate-900">{sectionTitle}</h3>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                isValid
+                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                  : 'bg-rose-100 text-rose-700 border border-rose-200'
+              }`}
+            >
+              {isValid ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+              {isValid ? 'Validated' : 'Invalid'}
+            </span>
+          </div>
+
+          {/* Validation message */}
+          <div
+            className={`rounded-lg border-2 p-4 ${
               isValid
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-rose-200 bg-rose-50 text-rose-700'
+                ? 'border-emerald-200 bg-emerald-50/50'
+                : 'border-rose-200 bg-rose-50/50'
             }`}
           >
-            {isValid ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-            {isValid ? 'Valid' : 'Invalid'}
-          </span>
-        </div>
-
-        <div
-          className={`rounded-md border px-4 py-3 ${
-            isValid
-              ? 'border-emerald-300 bg-emerald-50'
-              : 'border-rose-200 bg-rose-50'
-          }`}
-        >
-          <div className="flex items-start gap-2">
-            {isValid ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-            )}
-            <p className={`text-sm font-medium ${
-              isValid ? 'text-emerald-800' : 'text-rose-700'
-            }`}>
-              {fileResult?.message || 'No validation details available yet.'}
-            </p>
+            <div className="flex items-start gap-3">
+              {isValid ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+              )}
+              <p className={`text-sm font-medium leading-relaxed ${
+                isValid ? 'text-emerald-900' : 'text-rose-900'
+              }`}>
+                {fileResult?.message || 'No validation details available yet.'}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
-          <span>
-            <span className="font-medium text-slate-700">Rows detected:</span>{' '}
-            {rowsDetected !== null ? rowsDetected : '-'}
-          </span>
-          <span>
-            <span className="font-medium text-slate-700">Columns detected:</span> {columns.length}
-          </span>
-        </div>
-
-        <div className="rounded-md border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
-            <p className="text-xs font-semibold text-slate-700">CSV Preview (First 10 Rows)</p>
+          {/* File statistics */}
+          <div className="flex flex-wrap items-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-900">Rows:</span>
+              <span className="font-mono text-blue-600">
+                {rowsDetected !== null ? rowsDetected.toLocaleString() : '-'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-900">Columns:</span>
+              <span className="font-mono text-blue-600">{columns.length}</span>
+            </div>
           </div>
-          {columns.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-max w-full divide-y divide-slate-200 text-xs text-slate-700">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="whitespace-nowrap px-3 py-2 text-left font-medium text-slate-700">#</th>
-                    {columns.map((column) => (
-                      <th
-                        key={`${sectionTitle}-head-${column}`}
-                        className="whitespace-nowrap px-3 py-2 text-left font-medium text-slate-700"
-                      >
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {previewRows.length > 0 ? (
-                    previewRows.map((row, rowIndex) => (
-                      <tr key={`${sectionTitle}-row-${rowIndex}`} className="align-top">
-                        <td className="whitespace-nowrap px-3 py-2 text-slate-500">{rowIndex + 1}</td>
-                        {columns.map((column) => (
-                          <td
-                            key={`${sectionTitle}-cell-${rowIndex}-${column}`}
-                            className="min-w-[140px] break-words px-3 py-2 text-slate-700"
-                          >
-                            {row?.[column] || '-'}
-                          </td>
-                        ))}
-                      </tr>
-                    ))
-                  ) : (
+
+          {/* CSV Preview Table */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
+            <div className="bg-gradient-to-r from-slate-100 to-slate-50 border-b border-slate-200 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-800">Data Preview (First 10 Rows)</p>
+            </div>
+            {columns.length > 0 ? (
+              <div className="overflow-x-auto bg-white">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
                     <tr>
-                      <td colSpan={columns.length + 1} className="px-3 py-3 text-slate-500">
-                        No sample data rows available.
-                      </td>
+                      <th className="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 border-r border-slate-200">
+                        #
+                      </th>
+                      {columns.map((column) => (
+                        <th
+                          key={`${sectionTitle}-head-${column}`}
+                          className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 whitespace-nowrap"
+                        >
+                          {column}
+                        </th>
+                      ))}
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="px-3 py-3 text-xs text-slate-500">
-              Preview unavailable until a valid header row is detected.
-            </div>
-          )}
-        </div>
-      </section>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {previewRows.length > 0 ? (
+                      previewRows.map((row, rowIndex) => (
+                        <tr key={`${sectionTitle}-row-${rowIndex}`} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="sticky left-0 z-10 bg-white px-4 py-3 text-xs font-medium text-slate-500 border-r border-slate-200 group-hover:bg-slate-50/50">
+                            {rowIndex + 1}
+                          </td>
+                          {columns.map((column) => (
+                            <td
+                              key={`${sectionTitle}-cell-${rowIndex}-${column}`}
+                              className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap min-w-[160px]"
+                            >
+                              {row?.[column] || <span className="text-slate-400">-</span>}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={columns.length + 1} className="px-4 py-8 text-center text-sm text-slate-500">
+                          No sample data rows available.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-4 py-8 text-center text-sm text-slate-500 bg-white">
+                Preview unavailable until a valid header row is detected.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     );
   };
 
   if (!executionId) {
     return (
-      <div className="mx-auto max-w-5xl">
-        <Card className="border-slate-200 bg-white shadow-sm">
-          <CardContent className="space-y-4 p-6">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-6 space-y-5">
             <ExecutionWizardStepper activeStep={3} />
-            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              Missing execution id. Please complete previous steps first.
+            
+            <div className="rounded-lg border-2 border-rose-200 bg-rose-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-rose-900">Missing Execution ID</p>
+                  <p className="text-sm text-rose-700 mt-1">
+                    Please complete the previous steps first to continue with validation.
+                  </p>
+                </div>
+              </div>
             </div>
+            
             <div>
-              <Button type="button" onClick={() => navigate('/executions/create')}>
-                Go To Create
+              <Button 
+                type="button" 
+                onClick={() => navigate('/executions/create')}
+                className="bg-blue-600 text-white hover:bg-blue-700"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Go To Create Analysis
               </Button>
             </div>
           </CardContent>
@@ -218,113 +244,148 @@ const ExecutionValidate = () => {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <Card className="border-slate-200 bg-white shadow-sm">
-        <CardContent className="space-y-6 p-6">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+      {/* Header Section */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-6">
           <ExecutionWizardStepper activeStep={3} />
+          
+          <div className="mt-6">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Validate & Run</h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Review and validate your uploaded files, then start the analysis when ready.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
-          <div>
-            <h2 className="text-4xl font-semibold text-slate-900">Validate Files</h2>
+      {/* Validation Action Section */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-6 space-y-5">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">File Validation</h2>
+              <p className="text-sm text-slate-600 mt-0.5">
+                Click the button below to validate your uploaded files
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+              disabled={validationRunning || startingAnalysis}
+              onClick={() => void runValidation(true)}
+            >
+              {validationRunning ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Validating...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Validate Files
+                </>
+              )}
+            </Button>
           </div>
 
-          <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-5">
-            <h3 className="text-sm font-semibold text-slate-800">Step 3: Validate Files</h3>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                type="button"
-                className="bg-blue-600 text-white hover:bg-blue-700"
-                disabled={validationRunning || startingAnalysis}
-                onClick={() => void runValidation(true)}
-              >
-                {validationRunning ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Validating...
-                  </>
-                ) : (
-                  'Validate Uploaded Files'
-                )}
-              </Button>
-            </div>
-
-            {validationResult && (
-              <div className="space-y-3">
-                {validationResult.is_valid && (
-                  <div className="flex items-start gap-3 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-emerald-900">Validation Successful!</p>
-                      <p className="text-sm text-emerald-700 mt-0.5">
-                        Both files have been validated and are ready for processing. You can now start the analysis or save as draft.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  {renderCsvPreviewSection(validationResult?.input_file, 'Input Data CSV')}
-                  {renderCsvPreviewSection(validationResult?.questions_file, 'Criteria / Questions CSV')}
+          {/* Success Banner */}
+          {validationResult?.is_valid && (
+            <div className="rounded-lg border-2 border-emerald-300 bg-gradient-to-r from-emerald-50 to-emerald-50/50 p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-emerald-100 p-1">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 </div>
-
+                <div>
+                  <p className="text-base font-semibold text-emerald-900">Validation Successful!</p>
+                  <p className="text-sm text-emerald-700 mt-1">
+                    Both files have been validated successfully and are ready for processing. You can now start the analysis or save as draft.
+                  </p>
+                </div>
               </div>
-            )}
-
-            <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate(`/executions/create/upload?executionId=${executionId}`)}
-              >
-                Back To Upload
-              </Button>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!canStartActions || validationRunning || startingAnalysis}
-                  onClick={() => navigate('/executions')}
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  Save as Draft
-                </Button>
-                <Button
-                  type="button"
-                  className="bg-blue-600 text-white hover:bg-blue-700"
-                  disabled={!canStartActions || validationRunning || startingAnalysis}
-                  onClick={() => void handleStartAnalysis()}
-                >
-                  {startingAnalysis ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <PlayCircle className="mr-2 h-4 w-4" />
-                      Start Analysis
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {globalError && (
-            <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{globalError}</span>
             </div>
           )}
 
-          {globalSuccess && (
-            <div className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <span className="font-medium">{globalSuccess}</span>
+          {/* File Preview Sections */}
+          {validationResult && (
+            <div className="space-y-5 pt-2">
+              {renderCsvPreviewSection(validationResult?.input_file, 'Input Data CSV')}
+              {renderCsvPreviewSection(validationResult?.questions_file, 'Criteria / Questions CSV')}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Actions Section */}
+      <Card className="border-2 border-slate-200 bg-slate-50 shadow-md">
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate(`/executions/create/upload?executionId=${executionId}`)}
+              className="w-full border-slate-300 text-slate-700 shadow-sm transition-all hover:bg-slate-100 hover:shadow sm:w-auto"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Upload
+            </Button>
+            
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!canStartActions || validationRunning || startingAnalysis}
+                onClick={() => navigate('/executions')}
+                className="w-full border-slate-300 text-slate-700 shadow-sm transition-all hover:bg-slate-100 hover:shadow sm:w-auto"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Save as Draft
+              </Button>
+              <Button
+                type="button"
+                className="w-full bg-blue-600 text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg sm:w-auto"
+                disabled={!canStartActions || validationRunning || startingAnalysis}
+                onClick={() => void handleStartAnalysis()}
+              >
+                {startingAnalysis ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                    Start Analysis
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Error and Success Messages */}
+      {globalError && (
+        <Card className="border-2 border-rose-200 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+              <p className="text-sm font-medium text-rose-900">{globalError}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {globalSuccess && (
+        <Card className="border-2 border-emerald-300 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+              <p className="text-sm font-semibold text-emerald-900">{globalSuccess}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
