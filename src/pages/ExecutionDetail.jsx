@@ -395,6 +395,7 @@ const ExecutionDetail = () => {
             <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full lg:w-auto lg:justify-end">
               {canViewReport ? (
                 <>
+                  {/* Hidden for demo
                   <Button
                     type="button"
                     className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
@@ -403,6 +404,7 @@ const ExecutionDetail = () => {
                     <FileText className="mr-1.5 h-4 w-4" />
                     View Report
                   </Button>
+                  */}
                   <Button
                     type="button"
                     variant="outline"

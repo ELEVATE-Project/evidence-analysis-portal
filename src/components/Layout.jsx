@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   ListChecks,
-  ClipboardCheck,
-  FileText,
+  // ClipboardCheck,  // Unused - menu item hidden for demo
+  // FileText,        // Unused - menu item hidden for demo
   Menu,
   X,
   Shield,
@@ -16,8 +16,8 @@ import { useAuth } from '../context/AuthContext';
 const navigationItems = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
   { label: 'Analyses', path: '/executions', icon: ListChecks },
-  { label: 'Validate Criteria', path: '/validate-criteria', icon: ClipboardCheck },
-  { label: 'View Reports', path: '/reports', icon: FileText },
+  // { label: 'Validate Criteria', path: '/validate-criteria', icon: ClipboardCheck }, // Hidden for demo
+  // { label: 'View Reports', path: '/reports', icon: FileText }, // Hidden for demo
 ];
 
 const isMatch = (pathname, itemPath) => {

@@ -558,6 +558,7 @@ const Dashboard = () => {
 
                               {statusGroup === 'completed' && (
                                 <>
+                                  {/* Hidden for demo
                                   <Button
                                     type="button"
                                     className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
@@ -566,6 +567,7 @@ const Dashboard = () => {
                                     <FileText className="mr-1.5 h-3.5 w-3.5" />
                                     View Report
                                   </Button>
+                                  */}
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -671,6 +673,7 @@ const Dashboard = () => {
 
                         {statusGroup === 'completed' && (
                           <>
+                            {/* Hidden for demo
                             <Button
                               type="button"
                               className="flex-1 min-w-[110px] h-9 bg-blue-600 text-xs text-white hover:bg-blue-700"
@@ -679,6 +682,7 @@ const Dashboard = () => {
                               <FileText className="mr-1.5 h-3.5 w-3.5" />
                               Report
                             </Button>
+                            */}
                             <Button
                               type="button"
                               variant="outline"
