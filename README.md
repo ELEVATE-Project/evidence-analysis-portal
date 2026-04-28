@@ -49,3 +49,14 @@ React frontend SPA for the Evidence Analysis System.
    ```
    
    Checks code quality with ESLint.
+
+## Report Map Assets
+
+District map files live in `public/maps/states`. To regenerate them from the DataMeet district shapefile:
+
+```bash
+mkdir -p /tmp/datameet-districts
+curl -L https://raw.githubusercontent.com/datameet/maps/master/Districts/Census_2011/2011_Dist.shp -o /tmp/datameet-districts/2011_Dist.shp
+curl -L https://raw.githubusercontent.com/datameet/maps/master/Districts/Census_2011/2011_Dist.dbf -o /tmp/datameet-districts/2011_Dist.dbf
+npm run prepare:maps -- --shp /tmp/datameet-districts/2011_Dist.shp --dbf /tmp/datameet-districts/2011_Dist.dbf
+```

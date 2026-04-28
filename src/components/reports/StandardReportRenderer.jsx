@@ -16,8 +16,10 @@ import {
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { Download } from 'lucide-react';
+import { Download, Filter, BarChart3, Users, School, Building2, FileText, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '../ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import DistrictRelevanceMap from './DistrictRelevanceMap';
 import './standard-report.css';
 
 ChartJS.register(
@@ -60,6 +62,19 @@ const emptyFilters = {
   school: '',
   relevance: '',
 };
+
+const PDF_HEADER_HEIGHT_MM = 15;
+const PDF_FOOTER_HEIGHT_MM = 15;
+const PDF_MARGIN_MM = 10;
+const PDF_SECTION_GAP_MM = 5;
+
+const formatPdfTimestamp = () => new Date().toLocaleString('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 const relScore = (relevant, partiallyRelevant, total) => {
   if (!total) return 0;
@@ -203,6 +218,8 @@ const computeReportData = (rows) => {
   };
 
   const districtHierarchy = {};
+  const stateSummaries = {};
+  const stateDistrictStats = {};
 
   const teacherMap = {};
   const enrollment = {};
@@ -224,6 +241,7 @@ const computeReportData = (rows) => {
 
     const state = normalizeValue(row['Declared State']);
     if (state) statesSet.add(state.toUpperCase());
+    const stateName = state || 'Unknown State';
 
     if (RELEVANCE_TYPES.includes(relevanceTag)) {
       relevanceCounts[relevanceTag] += 1;
@@ -233,6 +251,19 @@ const computeReportData = (rows) => {
     if (school) schoolsSet.add(school);
     if (district) districtsSet.add(district);
     if (block) blocksSet.add(block);
+
+    if (!stateSummaries[stateName]) {
+      stateSummaries[stateName] = createNode();
+    }
+    updateNode(stateSummaries[stateName], relevanceTag);
+
+    if (!stateDistrictStats[stateName]) {
+      stateDistrictStats[stateName] = {};
+    }
+    if (!stateDistrictStats[stateName][district]) {
+      stateDistrictStats[stateName][district] = createNode();
+    }
+    updateNode(stateDistrictStats[stateName][district], relevanceTag);
 
     const subject = parseSubject(task);
     const grade = parseGrade(task);
@@ -493,6 +524,8 @@ const computeReportData = (rows) => {
     submissionRelevant: submissionLabels.map((label) => relevant[label] || 0),
     taskEntries,
     districtHierarchy,
+    stateSummaries,
+    stateDistrictStats,
     sortedDistricts,
     topHierarchy,
     hasEnrollmentData,
@@ -505,6 +538,89 @@ const computeReportData = (rows) => {
 const formatNumber = (value) => {
   if (!Number.isFinite(value)) return '0';
   return value.toLocaleString('en-IN');
+};
+
+const wrapChartLabel = (label, maxLineLength = 18, maxLines = 3) => {
+  const words = String(label || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let currentLine = '';
+
+  words.forEach((word) => {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    if (nextLine.length > maxLineLength && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = nextLine;
+    }
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+
+  const visibleLines = lines.slice(0, maxLines);
+  visibleLines[maxLines - 1] = `${visibleLines[maxLines - 1].replace(/\.+$/, '')}...`;
+  return visibleLines;
+};
+
+const mapSvgToCanvas = (svgElement) => new Promise((resolve, reject) => {
+  const rect = svgElement.getBoundingClientRect();
+  const width = Math.max(1, Math.ceil(rect.width));
+  const height = Math.max(1, Math.ceil(rect.height));
+  const serializedSvg = new XMLSerializer().serializeToString(svgElement);
+  const svgBlob = new Blob([serializedSvg], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+  const image = new Image();
+
+  image.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    canvas.className = svgElement.className?.baseVal || svgElement.className || '';
+    const context = canvas.getContext('2d');
+    context.scale(2, 2);
+    context.drawImage(image, 0, 0, width, height);
+    URL.revokeObjectURL(url);
+    resolve(canvas);
+  };
+
+  image.onerror = () => {
+    URL.revokeObjectURL(url);
+    reject(new Error('Unable to prepare map SVG for PDF capture.'));
+  };
+
+  image.src = url;
+});
+
+const replaceMapSvgsForPdf = async (rootElement) => {
+  const replacements = [];
+  const mapSvgs = Array.from(rootElement.querySelectorAll('.report-map-svg'));
+
+  for (const svgElement of mapSvgs) {
+    const canvas = await mapSvgToCanvas(svgElement);
+    const parent = svgElement.parentNode;
+    const nextSibling = svgElement.nextSibling;
+    parent.replaceChild(canvas, svgElement);
+    replacements.push({ parent, svgElement, canvas, nextSibling });
+  }
+
+  return () => {
+    replacements.forEach(({ parent, svgElement, canvas, nextSibling }) => {
+      if (canvas.parentNode === parent) {
+        parent.replaceChild(svgElement, canvas);
+      }
+      if (nextSibling && svgElement.nextSibling !== nextSibling && nextSibling.parentNode === parent) {
+        parent.insertBefore(svgElement, nextSibling);
+      }
+    });
+  };
 };
 
 const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
@@ -743,36 +859,118 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
     }
 
     setPdfLoading(true);
-    try {
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
-      const imageData = canvas.toDataURL('image/png');
+    const reportElement = reportRef.current;
 
+    try {
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
+      const contentWidth = pdfWidth - (PDF_MARGIN_MM * 2);
+      const contentAreaHeight = pdfHeight - PDF_HEADER_HEIGHT_MM - PDF_FOOTER_HEIGHT_MM;
+      const contentBottomY = PDF_HEADER_HEIGHT_MM + contentAreaHeight;
 
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const reportName = sourceLabel?.startsWith('Analysis Report - ')
+        ? sourceLabel
+        : `Analysis Report - ${sourceLabel || 'Unnamed Execution'}`;
+      const timestamp = formatPdfTimestamp();
+      const systemName = 'Evidence Analysis System';
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      const addHeader = () => {
+        pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(10);
+        pdf.setFont(undefined, 'bold');
+        pdf.text(reportName, pdfWidth / 2, 10, { align: 'center' });
+      };
 
-      pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      const addFooter = (currentPage, totalPages) => {
+        const footerY = pdfHeight - 8;
+        pdf.setTextColor(71, 85, 105);
+        pdf.setFontSize(8);
+        pdf.setFont(undefined, 'normal');
+        pdf.setDrawColor(203, 213, 225);
+        pdf.setLineWidth(0.5);
+        pdf.line(PDF_MARGIN_MM, pdfHeight - PDF_FOOTER_HEIGHT_MM + 2, pdfWidth - PDF_MARGIN_MM, pdfHeight - PDF_FOOTER_HEIGHT_MM + 2);
+        
+        pdf.text(`Page ${currentPage} of ${totalPages}`, PDF_MARGIN_MM, footerY);
+        pdf.text(`Generated: ${timestamp}`, pdfWidth / 2, footerY, { align: 'center' });
+        pdf.text(systemName, pdfWidth - PDF_MARGIN_MM, footerY, { align: 'right' });
+      };
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
+      let yPosition = PDF_HEADER_HEIGHT_MM;
+
+      const startNewPage = () => {
+        if (pdf.internal.getNumberOfPages() > 1 || yPosition > PDF_HEADER_HEIGHT_MM) {
+          pdf.addPage();
+        }
+        addHeader();
+        yPosition = PDF_HEADER_HEIGHT_MM;
+      };
+
+      const renderSectionCanvas = (section) => html2canvas(section, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: Math.max(document.documentElement.clientWidth, section.scrollWidth),
+        onclone: (clonedDocument, clonedSection) => {
+          clonedSection.classList.add('report-pdf-section-clone');
+          clonedDocument.querySelectorAll('.overflow-x-auto, .overflow-y-visible').forEach((element) => {
+            element.style.overflow = 'visible';
+          });
+          clonedDocument.querySelectorAll('table').forEach((table) => {
+            table.style.width = '100%';
+            table.style.tableLayout = 'auto';
+          });
+        },
+      });
+
+      reportElement.classList.add('report-pdf-exporting');
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const sections = Array.from(reportElement.children).filter((section) => {
+        const rect = section.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+
+      addHeader();
+      
+      for (const section of sections) {
+        const restoreMapSvgs = await replaceMapSvgsForPdf(section);
+        let canvas;
+        try {
+          canvas = await renderSectionCanvas(section);
+        } finally {
+          restoreMapSvgs();
+        }
+        const imageData = canvas.toDataURL('image/png');
+        const naturalWidth = contentWidth;
+        const naturalHeight = (canvas.height * naturalWidth) / canvas.width;
+        let renderWidth = naturalWidth;
+        let renderHeight = naturalHeight;
+
+        if (renderHeight > contentAreaHeight) {
+          const scaleToPage = contentAreaHeight / renderHeight;
+          renderHeight = contentAreaHeight;
+          renderWidth = naturalWidth * scaleToPage;
+        }
+
+        if (yPosition > PDF_HEADER_HEIGHT_MM && yPosition + renderHeight > contentBottomY) {
+          startNewPage();
+        }
+
+        const xPosition = PDF_MARGIN_MM + ((contentWidth - renderWidth) / 2);
+        pdf.addImage(imageData, 'PNG', xPosition, yPosition, renderWidth, renderHeight);
+        yPosition += renderHeight + PDF_SECTION_GAP_MM;
+      }
+
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        pdf.setPage(pageNum);
+        addFooter(pageNum, totalPages);
       }
 
       pdf.save('evidence-analysis-report.pdf');
     } finally {
+      reportElement.classList.remove('report-pdf-exporting');
       setPdfLoading(false);
     }
   };
@@ -791,127 +989,225 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
   }
 
   return (
-    <div className="report-dashboard">
-      <div className="report-header">
-        <div>
-          <h2>MIP Evidence Analysis Dashboard</h2>
-          <p>{sourceLabel}</p>
-        </div>
-        <Button type="button" onClick={downloadPdf} disabled={pdfLoading} className="report-download-btn">
-          <Download className="h-4 w-4" />
-          {pdfLoading ? 'Generating PDF...' : 'Download PDF'}
-        </Button>
-      </div>
-
-      <div className="report-filter-panel">
-        <div className="report-filter-grid">
-          <label>
-            State
-            <select
-              value={filters.state}
-              onChange={(event) => setFilters((previous) => ({ ...previous, state: event.target.value, district: '', block: '', school: '' }))}
-            >
-              <option value="">All States</option>
-              {filterOptions.states.map((state) => (
-                <option key={state} value={state}>{state}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            District
-            <select
-              value={filters.district}
-              onChange={(event) => setFilters((previous) => ({ ...previous, district: event.target.value, block: '', school: '' }))}
-            >
-              <option value="">All Districts</option>
-              {filterOptions.districts.map((district) => (
-                <option key={district} value={district}>{district}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Block
-            <select
-              value={filters.block}
-              onChange={(event) => setFilters((previous) => ({ ...previous, block: event.target.value, school: '' }))}
-            >
-              <option value="">All Blocks</option>
-              {filterOptions.blocks.map((block) => (
-                <option key={block} value={block}>{block}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            School
-            <select
-              value={filters.school}
-              onChange={(event) => setFilters((previous) => ({ ...previous, school: event.target.value }))}
-            >
-              <option value="">All Schools</option>
-              {filterOptions.schools.map((school) => (
-                <option key={school} value={school}>{school}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Relevance Tag
-            <select
-              value={filters.relevance}
-              onChange={(event) => setFilters((previous) => ({ ...previous, relevance: event.target.value }))}
-            >
-              <option value="">All Relevance</option>
-              {RELEVANCE_TYPES.map((tag) => (
-                <option key={tag} value={tag}>{tag}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="report-filter-actions">
-          <Button type="button" variant="outline" onClick={() => setFilters(emptyFilters)}>
-            Reset Filters
-          </Button>
-        </div>
-      </div>
-
-      <div className="report-content" ref={reportRef}>
-        <section className="report-section">
-          <h3>📊 Executive Summary</h3>
-          <div className="report-grid report-grid-3">
-            <div className="report-card">
-              <p>Total Evidence</p>
-              <strong>{formatNumber(reportData.totalEvidence)}</strong>
+    <div className="space-y-4 sm:space-y-6">
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-semibold text-slate-800">Analysis Report</h2>
+              <p className="mt-1 text-sm text-slate-600">{sourceLabel}</p>
             </div>
-            <div className="report-card">
-              <p>Relevance Distribution</p>
-              <strong>{formatNumber(reportData.relevanceCounts.Relevant)} Relevant</strong>
-              <span>{formatNumber(reportData.relevanceCounts['Partially Relevant'])} Partially Relevant</span>
-              <span>{formatNumber(reportData.relevanceCounts.Irrelevant)} Irrelevant</span>
-            </div>
-            <div className="report-card">
-              <p>Participation</p>
-              <strong>{formatNumber(reportData.usersCount)}</strong>
-              <span>Users with MIPs</span>
-            </div>
+            <Button 
+              type="button" 
+              onClick={downloadPdf} 
+              disabled={pdfLoading}
+              className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {pdfLoading ? 'Generating PDF...' : 'Download PDF'}
+            </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
+            <Filter className="h-4 w-4 text-blue-600" />
+            Filter Report Data
+          </CardTitle>
+          <CardDescription>Refine report insights by location and relevance criteria.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+            <label className="space-y-1 text-sm text-slate-700">
+              <span className="font-medium">State</span>
+              <select
+                value={filters.state}
+                onChange={(event) => setFilters((previous) => ({ ...previous, state: event.target.value, district: '', block: '', school: '' }))}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">All States</option>
+                {filterOptions.states.map((state) => (
+                  <option key={state} value={state}>{state}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1 text-sm text-slate-700">
+              <span className="font-medium">District</span>
+              <select
+                value={filters.district}
+                onChange={(event) => setFilters((previous) => ({ ...previous, district: event.target.value, block: '', school: '' }))}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">All Districts</option>
+                {filterOptions.districts.map((district) => (
+                  <option key={district} value={district}>{district}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1 text-sm text-slate-700">
+              <span className="font-medium">Block</span>
+              <select
+                value={filters.block}
+                onChange={(event) => setFilters((previous) => ({ ...previous, block: event.target.value, school: '' }))}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">All Blocks</option>
+                {filterOptions.blocks.map((block) => (
+                  <option key={block} value={block}>{block}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1 text-sm text-slate-700">
+              <span className="font-medium">School</span>
+              <select
+                value={filters.school}
+                onChange={(event) => setFilters((previous) => ({ ...previous, school: event.target.value }))}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">All Schools</option>
+                {filterOptions.schools.map((school) => (
+                  <option key={school} value={school}>{school}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1 text-sm text-slate-700">
+              <span className="font-medium">Relevance Tag</span>
+              <select
+                value={filters.relevance}
+                onChange={(event) => setFilters((previous) => ({ ...previous, relevance: event.target.value }))}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">All Relevance</option>
+                {RELEVANCE_TYPES.map((tag) => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setFilters(emptyFilters)}
+              className="h-10 border-slate-300 text-slate-700 hover:bg-slate-100"
+            >
+              Clear Filters
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4 sm:space-y-6" ref={reportRef}>
+        <section className="grid gap-4 md:grid-cols-3">
+          <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Evidence</p>
+                  <p className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-800">{formatNumber(reportData.totalEvidence)}</p>
+                </div>
+                <div className="rounded-md border p-2 flex-shrink-0 text-blue-600 bg-blue-50 border-blue-100">
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+            <CardContent className="p-4 sm:p-5">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Relevance Distribution</p>
+                <div className="space-y-1">
+                  <p className="text-lg font-semibold text-emerald-700">{formatNumber(reportData.relevanceCounts.Relevant)} Relevant</p>
+                  <p className="text-sm text-amber-700">{formatNumber(reportData.relevanceCounts['Partially Relevant'])} Partially</p>
+                  <p className="text-sm text-rose-700">{formatNumber(reportData.relevanceCounts.Irrelevant)} Irrelevant</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Participation</p>
+                  <p className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-800">{formatNumber(reportData.usersCount)}</p>
+                  <p className="mt-1 text-xs text-slate-600">Users with Evidence</p>
+                </div>
+                <div className="rounded-md border p-2 flex-shrink-0 text-blue-600 bg-blue-50 border-blue-100">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
-        <section className="report-section">
-          <h3>📈 Evidence Submission Overview</h3>
-          <div className="report-grid report-grid-4">
-            <div className="report-card"><p>Schools</p><strong>{formatNumber(reportData.schoolsCount)}</strong></div>
-            <div className="report-card"><p>Districts</p><strong>{formatNumber(reportData.districtsCount)}</strong></div>
-            <div className="report-card"><p>Blocks</p><strong>{formatNumber(reportData.blocksCount)}</strong></div>
-            <div className="report-card"><p>Visible Evidence</p><strong>{formatNumber(reportData.totalEvidence)}</strong></div>
-          </div>
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg text-slate-800">Evidence Submission Overview</CardTitle>
+            <CardDescription>Comprehensive view of submissions across locations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <Card className="border-slate-200 shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Schools</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-800">{formatNumber(reportData.schoolsCount)}</p>
+                    </div>
+                    <div className="rounded-md border p-2 flex-shrink-0 text-emerald-600 bg-emerald-50 border-emerald-100">
+                      <School className="h-4 w-4" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <div className="report-chart-grid report-chart-grid-stacked">
-            <div className="report-chart-card">
-              <h4>Project Timeline</h4>
+              <Card className="border-slate-200 shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Districts</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-800">{formatNumber(reportData.districtsCount)}</p>
+                    </div>
+                    <div className="rounded-md border p-2 flex-shrink-0 text-amber-600 bg-amber-50 border-amber-100">
+                      <Building2 className="h-4 w-4" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-slate-200 shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Blocks</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-800">{formatNumber(reportData.blocksCount)}</p>
+                    </div>
+                    <div className="rounded-md border p-2 flex-shrink-0 text-blue-600 bg-blue-50 border-blue-100">
+                      <BarChart3 className="h-4 w-4" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+          </CardContent>
+        </Card>
+
+        {/* Project Timeline Section */}
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg text-slate-800">Project Timeline</CardTitle>
+            <CardDescription>Project starts and completions over time</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="w-full" style={{ height: '350px' }}>
               <Line
                 data={{
                   labels: reportData.timelineLabels,
@@ -923,6 +1219,7 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
                       backgroundColor: 'rgba(79, 172, 254, 0.2)',
                       fill: true,
                       tension: 0.35,
+                      borderWidth: 2,
                     },
                     {
                       label: 'Project Completions',
@@ -931,15 +1228,77 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
                       backgroundColor: 'rgba(66, 230, 149, 0.2)',
                       fill: true,
                       tension: 0.35,
+                      borderWidth: 2,
                     },
                   ],
                 }}
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  interaction: {
+                    mode: 'index',
+                    intersect: false,
+                  },
+                  plugins: {
+                    legend: {
+                      position: 'top',
+                      align: 'end',
+                      labels: {
+                        boxWidth: 12,
+                        padding: 15,
+                        font: {
+                          size: 12,
+                        },
+                      },
+                    },
+                    tooltip: {
+                      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                      padding: 12,
+                      titleFont: {
+                        size: 13,
+                      },
+                      bodyFont: {
+                        size: 12,
+                      },
+                    },
+                  },
+                  scales: {
+                    x: {
+                      grid: {
+                        display: false,
+                      },
+                      ticks: {
+                        font: {
+                          size: 11,
+                        },
+                      },
+                    },
+                    y: {
+                      beginAtZero: true,
+                      grid: {
+                        color: 'rgba(0, 0, 0, 0.05)',
+                      },
+                      ticks: {
+                        font: {
+                          size: 11,
+                        },
+                      },
+                    },
+                  },
+                }}
               />
             </div>
+          </CardContent>
+        </Card>
 
-            <div className="report-chart-card">
-              <h4>Submission Volume</h4>
+        {/* Submission Volume Section */}
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg text-slate-800">Submission Volume</CardTitle>
+            <CardDescription>Total and relevant evidence submissions over time</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="w-full" style={{ height: '350px' }}>
               <Line
                 data={{
                   labels: reportData.submissionLabels,
@@ -951,6 +1310,7 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
                       backgroundColor: 'rgba(79, 172, 254, 0.2)',
                       fill: true,
                       tension: 0.35,
+                      borderWidth: 2,
                     },
                     {
                       label: 'Relevant Evidence',
@@ -959,482 +1319,801 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
                       backgroundColor: 'rgba(255, 107, 107, 0.2)',
                       fill: true,
                       tension: 0.35,
+                      borderWidth: 2,
                     },
                   ],
                 }}
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }}
-              />
-            </div>
-          </div>
-
-          {shouldShowSubjectGrade && (
-            <div className="report-chart-grid">
-              <div className="report-chart-card">
-                <h4>Subject Distribution</h4>
-                <Doughnut
-                  data={{
-                    labels: Object.keys(reportData.subjectCounts),
-                    datasets: [
-                      {
-                        data: Object.values(reportData.subjectCounts),
-                        backgroundColor: ['#ff6b6b', '#4ecdc4', '#45b7d1', '#feca57', '#96ceb4'],
-                      },
-                    ],
-                  }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }}
-                />
-              </div>
-              <div className="report-chart-card">
-                <h4>Grade Distribution</h4>
-                <Doughnut
-                  data={{
-                    labels: Object.keys(reportData.gradeCounts),
-                    datasets: [
-                      {
-                        data: Object.values(reportData.gradeCounts),
-                        backgroundColor: ['#a8e6cf', '#dcedc1', '#ffd3a5', '#fd9853', '#ff8a80'],
-                      },
-                    ],
-                  }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }}
-                />
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="report-section">
-          <h3>🎯 Quality & Relevance Analysis</h3>
-          <div className="report-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Relevant</th>
-                  <th>Partially Relevant</th>
-                  <th>Irrelevant</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>{formatNumber(reportData.relevanceCounts.Relevant)}</td>
-                  <td>{formatNumber(reportData.relevanceCounts['Partially Relevant'])}</td>
-                  <td>{formatNumber(reportData.relevanceCounts.Irrelevant)}</td>
-                  <td>{formatNumber(reportData.totalEvidence)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="report-chart-card report-tall-chart">
-            <h4>Task Completion Analysis</h4>
-            <Bar
-              data={{
-                labels: reportData.taskEntries.map(([task]) => task),
-                datasets: [
-                  {
-                    label: 'Task Completion Count',
-                    data: reportData.taskEntries.map(([, count]) => count),
-                    backgroundColor: 'rgba(79, 172, 254, 0.8)',
-                    borderColor: '#4facfe',
-                    borderWidth: 1,
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  interaction: {
+                    mode: 'index',
+                    intersect: false,
                   },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                  x: {
-                    ticks: {
-                      callback(value) {
-                        const label = this.getLabelForValue(value);
-                        return label.length > 40 ? `${label.slice(0, 40)}...` : label;
+                  plugins: {
+                    legend: {
+                      position: 'top',
+                      align: 'end',
+                      labels: {
+                        boxWidth: 12,
+                        padding: 15,
+                        font: {
+                          size: 12,
+                        },
+                      },
+                    },
+                    tooltip: {
+                      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                      padding: 12,
+                      titleFont: {
+                        size: 13,
+                      },
+                      bodyFont: {
+                        size: 12,
                       },
                     },
                   },
-                  y: { beginAtZero: true },
-                },
-              }}
-            />
-          </div>
-        </section>
-
-        <section className="report-section">
-          <h3>🗺️ District-wise Submission Quality & Insights</h3>
-          <div className="report-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>District / Block / School</th>
-                  <th>Total</th>
-                  <th>Relevant</th>
-                  <th>Partially Relevant</th>
-                  <th>Irrelevant</th>
-                  <th>% Relevant</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reportData.sortedDistricts.map(([district, districtData]) => {
-                  const districtScore = relScore(
-                    districtData.Relevant,
-                    districtData['Partially Relevant'],
-                    districtData.total
-                  );
-                  const districtExpanded = expandedDistricts.has(district);
-
-                  return (
-                    <Fragment key={district}>
-                      <tr className="clickable-row" onClick={() => toggleDistrict(district)}>
-                        <td><strong>{districtExpanded ? '▼' : '▶'} {district}</strong></td>
-                        <td>{formatNumber(districtData.total)}</td>
-                        <td>{formatNumber(districtData.Relevant)}</td>
-                        <td>{formatNumber(districtData['Partially Relevant'])}</td>
-                        <td>{formatNumber(districtData.Irrelevant)}</td>
-                        <td>{districtScore.toFixed(1)}%</td>
-                      </tr>
-
-                      {districtExpanded && Object.entries(districtData.blocks).map(([block, blockData]) => {
-                        const blockKey = `${district}||${block}`;
-                        const blockExpanded = expandedBlocks.has(blockKey);
-                        const blockScore = relScore(
-                          blockData.Relevant,
-                          blockData['Partially Relevant'],
-                          blockData.total
-                        );
-
-                        return (
-                          <Fragment key={blockKey}>
-                            <tr className="clickable-row report-row-block" onClick={() => toggleBlock(district, block)}>
-                              <td>{blockExpanded ? '▼' : '▶'} {block}</td>
-                              <td>{formatNumber(blockData.total)}</td>
-                              <td>{formatNumber(blockData.Relevant)}</td>
-                              <td>{formatNumber(blockData['Partially Relevant'])}</td>
-                              <td>{formatNumber(blockData.Irrelevant)}</td>
-                              <td>{blockScore.toFixed(1)}%</td>
-                            </tr>
-
-                            {blockExpanded && Object.entries(blockData.schools).map(([school, schoolData]) => {
-                              const schoolScore = relScore(
-                                schoolData.Relevant,
-                                schoolData['Partially Relevant'],
-                                schoolData.total
-                              );
-                              return (
-                                <tr key={`${blockKey}||${school}`} className="report-row-school">
-                                  <td>{school}</td>
-                                  <td>{formatNumber(schoolData.total)}</td>
-                                  <td>{formatNumber(schoolData.Relevant)}</td>
-                                  <td>{formatNumber(schoolData['Partially Relevant'])}</td>
-                                  <td>{formatNumber(schoolData.Irrelevant)}</td>
-                                  <td>{schoolScore.toFixed(1)}%</td>
-                                </tr>
-                              );
-                            })}
-                          </Fragment>
-                        );
-                      })}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="report-section">
-          <div className="report-top-hierarchy-head">
-            <h3>🏆 Top Relevance Hierarchy</h3>
-            <label className="report-top-hierarchy-select-wrap">
-              <span>Show top:</span>
-              <select
-                value={topHierarchyCount}
-                onChange={(event) => {
-                  const nextTopN = Number.parseInt(event.target.value, 10) || 5;
-                  setTopHierarchyCount(nextTopN);
-                  setExpandedTopDistricts(new Set());
-                  setExpandedTopBlocks(new Set());
-                  setExpandedTopSchools(new Set());
+                  scales: {
+                    x: {
+                      grid: {
+                        display: false,
+                      },
+                      ticks: {
+                        font: {
+                          size: 11,
+                        },
+                      },
+                    },
+                    y: {
+                      beginAtZero: true,
+                      grid: {
+                        color: 'rgba(0, 0, 0, 0.05)',
+                      },
+                      ticks: {
+                        font: {
+                          size: 11,
+                        },
+                      },
+                    },
+                  },
                 }}
-              >
-                <option value={5}>Top 5</option>
-                <option value={10}>Top 10</option>
-                <option value={15}>Top 15</option>
-              </select>
-            </label>
-          </div>
-          <p className="report-muted report-top-hierarchy-description">
-            Top {topHierarchyCount} Districts → within each, Top {topHierarchyCount} Blocks → Top {topHierarchyCount} Schools → Top {topHierarchyCount} Teachers · ranked by Relevance %
-          </p>
-
-          <div className="report-table-wrap report-top-hierarchy-wrap">
-            <table className="report-top-hierarchy-table">
-              <thead>
-                <tr>
-                  <th>District / Block / School / Teacher</th>
-                  <th>Total Evidence</th>
-                  <th>% Relevant</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleTopHierarchy.length > 0 ? (
-                  visibleTopHierarchy.map((district, districtIndex) => {
-                    const districtKey = district.district;
-                    const districtExpanded = expandedTopDistricts.has(districtKey);
-
-                    return (
-                      <Fragment key={districtKey}>
-                        <tr
-                          className={`report-top-row report-top-district-row ${districtExpanded ? 'is-expanded' : ''}`}
-                          onClick={() => toggleTopDistrict(districtKey)}
-                        >
-                          <td className="report-top-clickable-cell">
-                            <div className="report-top-cell-content">
-                              <span className={`report-top-arrow ${districtExpanded ? 'is-rotated' : ''}`} />
-                              <strong>#{districtIndex + 1} {district.district}</strong>
-                            </div>
-                          </td>
-                          <td>{formatNumber(district.total)}</td>
-                          <td><span className="report-top-percentage-badge">{district.relevancePercent.toFixed(1)}%</span></td>
-                        </tr>
-
-                        {districtExpanded &&
-                          district.blocks.map((block, blockIndex) => {
-                            const blockKey = `${districtKey}||${block.block}`;
-                            const blockExpanded = expandedTopBlocks.has(blockKey);
-
-                            return (
-                              <Fragment key={blockKey}>
-                                <tr
-                                  className={`report-top-row report-top-block-row ${blockExpanded ? 'is-expanded' : ''}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    toggleTopBlock(districtKey, block.block);
-                                  }}
-                                >
-                                  <td className="report-top-clickable-cell report-top-indent-1">
-                                    <div className="report-top-cell-content">
-                                      <span className={`report-top-arrow ${blockExpanded ? 'is-rotated' : ''}`} />
-                                      <span>#{blockIndex + 1} {block.block}</span>
-                                    </div>
-                                  </td>
-                                  <td>{formatNumber(block.total)}</td>
-                                  <td><span className="report-top-percentage-badge">{block.relevancePercent.toFixed(1)}%</span></td>
-                                </tr>
-
-                                {blockExpanded &&
-                                  block.schools.map((school, schoolIndex) => {
-                                    const schoolKey = `${districtKey}||${block.block}||${school.school}`;
-                                    const schoolExpanded = expandedTopSchools.has(schoolKey);
-
-                                    return (
-                                      <Fragment key={schoolKey}>
-                                        <tr
-                                          className={`report-top-row report-top-school-row ${schoolExpanded ? 'is-expanded' : ''}`}
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            toggleTopSchool(districtKey, block.block, school.school);
-                                          }}
-                                        >
-                                          <td className="report-top-clickable-cell report-top-indent-2">
-                                            <div className="report-top-cell-content">
-                                              <span className={`report-top-arrow ${schoolExpanded ? 'is-rotated' : ''}`} />
-                                              <span>#{schoolIndex + 1} {school.school}</span>
-                                            </div>
-                                          </td>
-                                          <td>{formatNumber(school.total)}</td>
-                                          <td><span className="report-top-percentage-badge">{school.relevancePercent.toFixed(1)}%</span></td>
-                                        </tr>
-
-                                        {schoolExpanded &&
-                                          school.teachers.map((teacher, teacherIndex) => (
-                                            <tr
-                                              key={`${schoolKey}||${teacher.teacher}`}
-                                              className="report-top-row report-top-teacher-row"
-                                            >
-                                              <td className="report-top-indent-3">
-                                                <div className="report-top-cell-content">
-                                                  <span className="report-top-teacher-icon">👤</span>
-                                                  <span>#{teacherIndex + 1}</span>
-                                                  <code>{teacher.teacher}</code>
-                                                </div>
-                                              </td>
-                                              <td>{formatNumber(teacher.total)}</td>
-                                              <td><span className="report-top-percentage-badge">{teacher.relevancePercent.toFixed(1)}%</span></td>
-                                            </tr>
-                                          ))}
-                                      </Fragment>
-                                    );
-                                  })}
-                              </Fragment>
-                            );
-                          })}
-                      </Fragment>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={3} className="report-top-empty-cell">
-                      No hierarchy insights available for selected filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {hasRequiredEnrollmentColumns && reportData.hasEnrollmentData && (
-          <section className="report-section report-enrollment-section">
-            <h3>📚 Enrollment Analytics</h3>
-            <p className="report-muted report-enrollment-intro">
-              Review enrollment insights step-by-step with comparison, growth, and district-level details.
-            </p>
-
-            <div className="report-enrollment-steps">
-              <section className="report-enrollment-step">
-                <div className="report-enrollment-step-header">
-                  <h4>Enrollment Comparison</h4>
-                  <p>Compare 2024 and 2025 totals along with district-wise distribution.</p>
-                </div>
-
-                <div className="report-grid report-grid-3 report-enrollment-summary-grid">
-                  <div className="report-card">
-                    <p>Total Enrollment 2024</p>
-                    <strong>{formatNumber(enrollmentSummary.enrollment2024)}</strong>
-                  </div>
-                  <div className="report-card">
-                    <p>Total Enrollment 2025</p>
-                    <strong>{formatNumber(enrollmentSummary.enrollment2025)}</strong>
-                  </div>
-                  <div className="report-card">
-                    <p>Districts with Data</p>
-                    <strong>{formatNumber(enrollmentSummary.districtCount)}</strong>
-                  </div>
-                </div>
-
-                <div className="report-chart-card report-enrollment-chart-card">
-                  <h4>Enrollment 2024 vs 2025 by District</h4>
-                  <Bar
-                    data={{
-                      labels: enrollmentDistrictRowsSorted.map((row) => row.district),
-                      datasets: [
-                        {
-                          label: 'Enrollment 2024',
-                          data: enrollmentDistrictRowsSorted.map((row) => row.enrollment2024),
-                          backgroundColor: 'rgba(79, 172, 254, 0.8)',
-                        },
-                        {
-                          label: 'Enrollment 2025',
-                          data: enrollmentDistrictRowsSorted.map((row) => row.enrollment2025),
-                          backgroundColor: 'rgba(66, 230, 149, 0.8)',
-                        },
-                      ],
-                    }}
-                    options={{ responsive: true, maintainAspectRatio: false }}
-                  />
-                </div>
-              </section>
-
-              <section className="report-enrollment-step">
-                <div className="report-enrollment-step-header">
-                  <h4>Enrollment Growth</h4>
-                  <p>Inspect district-level growth percentage between 2024 and 2025.</p>
-                </div>
-
-                <div className="report-chart-card report-enrollment-chart-card">
-                  <h4>Enrollment Growth (%) by District</h4>
-                  <Bar
-                    data={{
-                      labels: enrollmentDistrictRowsSorted.map((row) => row.district),
-                      datasets: [
-                        {
-                          label: 'Growth %',
-                          data: enrollmentDistrictRowsSorted.map((row) => row.growth),
-                          backgroundColor: enrollmentDistrictRowsSorted.map((row) =>
-                            row.growth >= 0 ? 'rgba(66, 230, 149, 0.8)' : 'rgba(255, 107, 107, 0.8)'
-                          ),
-                        },
-                      ],
-                    }}
-                    options={{ responsive: true, maintainAspectRatio: false }}
-                  />
-                </div>
-              </section>
-
-              <section className="report-enrollment-step">
-                <div className="report-enrollment-step-header">
-                  <h4>District Data Table</h4>
-                  <p>View district totals, differences, and growth values in tabular form.</p>
-                </div>
-
-                <div className="report-table-wrap report-enrollment-table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>District</th>
-                        <th>Enrollment 2024</th>
-                        <th>Enrollment 2025</th>
-                        <th>Difference</th>
-                        <th>Growth %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {enrollmentDistrictRowsSorted.map((row) => (
-                        <tr key={row.district}>
-                          <td>{row.district}</td>
-                          <td>{formatNumber(row.enrollment2024)}</td>
-                          <td>{formatNumber(row.enrollment2025)}</td>
-                          <td>{formatNumber(row.difference)}</td>
-                          <td>{row.growth.toFixed(2)}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+              />
             </div>
-          </section>
+          </CardContent>
+        </Card>
+
+        {shouldShowSubjectGrade && (
+          <>
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg text-slate-800">Subject Distribution</CardTitle>
+                <CardDescription>Distribution of evidence across subjects</CardDescription>
+              </CardHeader>
+                  <CardContent className="p-6">
+                    <div className="w-full flex items-center justify-center" style={{ height: '350px' }}>
+                      <div style={{ maxWidth: '400px', width: '100%' }}>
+                        <Doughnut
+                          data={{
+                            labels: Object.keys(reportData.subjectCounts),
+                            datasets: [
+                              {
+                                data: Object.values(reportData.subjectCounts),
+                                backgroundColor: ['#ff6b6b', '#4ecdc4', '#45b7d1', '#feca57', '#96ceb4'],
+                                borderWidth: 0,
+                                hoverBorderWidth: 2,
+                                hoverBorderColor: '#fff',
+                              },
+                            ],
+                          }}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: {
+                                position: 'bottom',
+                                labels: {
+                                  boxWidth: 12,
+                                  padding: 15,
+                                  font: {
+                                    size: 12,
+                                  },
+                                },
+                              },
+                              tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                padding: 12,
+                                titleFont: {
+                                  size: 13,
+                                },
+                                bodyFont: {
+                                  size: 12,
+                                },
+                              },
+                            },
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg text-slate-800">Grade Distribution</CardTitle>
+                <CardDescription>Distribution of evidence across grades</CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
+                    <div className="w-full flex items-center justify-center" style={{ height: '350px' }}>
+                      <div style={{ maxWidth: '400px', width: '100%' }}>
+                        <Doughnut
+                          data={{
+                            labels: Object.keys(reportData.gradeCounts),
+                            datasets: [
+                              {
+                                data: Object.values(reportData.gradeCounts),
+                                backgroundColor: ['#a8e6cf', '#dcedc1', '#ffd3a5', '#fd9853', '#ff8a80'],
+                                borderWidth: 0,
+                                hoverBorderWidth: 2,
+                                hoverBorderColor: '#fff',
+                              },
+                            ],
+                          }}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: {
+                                position: 'bottom',
+                                labels: {
+                                  boxWidth: 12,
+                                  padding: 15,
+                                  font: {
+                                    size: 12,
+                                  },
+                                },
+                              },
+                              tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                padding: 12,
+                                titleFont: {
+                                  size: 13,
+                                },
+                                bodyFont: {
+                                  size: 12,
+                                },
+                              },
+                            },
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+            </Card>
+          </>
         )}
 
-        {reportData.hasCustomTasks && (
-          <section className="report-section">
-            <h3>🧩 User-Owned Tasks Analysis</h3>
-            <div className="report-table-wrap">
-              <table>
+        {/* Quality & Relevance Analysis Section */}
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg text-slate-800">Quality & Relevance Analysis</CardTitle>
+            <CardDescription>Comprehensive relevance breakdown</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
                 <thead>
-                  <tr>
-                    <th>District</th>
-                    <th>Total Custom Tasks</th>
-                    <th>Relevant</th>
-                    <th>Partially Relevant</th>
-                    <th>Irrelevant</th>
-                    <th>% Relevant</th>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-2 py-3 font-semibold">Relevant</th>
+                    <th className="px-2 py-3 font-semibold">Partially Relevant</th>
+                    <th className="px-2 py-3 font-semibold">Irrelevant</th>
+                    <th className="px-2 py-3 font-semibold">Total</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {Object.entries(reportData.customTaskHierarchy).map(([district, districtData]) => {
-                    const score = relScore(
+                <tbody className="divide-y divide-slate-100">
+                  <tr className="hover:bg-slate-50 transition-colors">
+                    <td className="px-2 py-3 text-sm text-slate-800 font-medium">{formatNumber(reportData.relevanceCounts.Relevant)}</td>
+                    <td className="px-2 py-3 text-sm text-slate-800 font-medium">{formatNumber(reportData.relevanceCounts['Partially Relevant'])}</td>
+                    <td className="px-2 py-3 text-sm text-slate-800 font-medium">{formatNumber(reportData.relevanceCounts.Irrelevant)}</td>
+                    <td className="px-2 py-3 text-sm text-slate-800 font-medium">{formatNumber(reportData.totalEvidence)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardContent className="p-4 sm:p-6">
+            <DistrictRelevanceMap
+              selectedState={filters.state}
+              stateSummaries={reportData.stateSummaries}
+              stateDistrictStats={reportData.stateDistrictStats}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Task Completion Analysis Section */}
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg text-slate-800">Task Completion Analysis</CardTitle>
+            <CardDescription>Top tasks by completion count</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-full overflow-x-auto overflow-y-visible">
+              <div style={{ 
+                height: '560px',
+                minWidth: `${Math.max(760, reportData.taskEntries.length * 150)}px`
+              }}>
+                <Bar
+                  data={{
+                    labels: reportData.taskEntries.map(([task]) => task),
+                    datasets: [
+                      {
+                        label: 'Task Completion Count',
+                        data: reportData.taskEntries.map(([, count]) => count),
+                        backgroundColor: 'rgba(79, 172, 254, 0.8)',
+                        borderColor: '#4facfe',
+                        borderWidth: 2,
+                      },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                      padding: {
+                        left: 20,
+                        right: 30,
+                        top: 15,
+                        bottom: 20,
+                      },
+                    },
+                    plugins: {
+                      legend: {
+                        display: false,
+                      },
+                      tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                        padding: 14,
+                        titleFont: {
+                          size: 13,
+                          weight: '600',
+                        },
+                        bodyFont: {
+                          size: 12,
+                        },
+                        displayColors: false,
+                        callbacks: {
+                          title: (context) => context[0]?.label || '',
+                          label: (context) => `Completions: ${formatNumber(context.parsed.y)}`,
+                        },
+                      },
+                    },
+                    scales: {
+                      x: {
+                        grid: {
+                          display: false,
+                        },
+                        ticks: {
+                          autoSkip: false,
+                          maxRotation: 0,
+                          minRotation: 0,
+                          padding: 8,
+                          font: {
+                            size: 10,
+                          },
+                          callback: function callback(value) {
+                            return wrapChartLabel(this.getLabelForValue(value));
+                          },
+                        },
+                        title: {
+                          display: true,
+                          text: 'Tasks',
+                          font: {
+                            size: 12,
+                            weight: '500',
+                          },
+                          padding: {
+                            top: 14,
+                          },
+                        },
+                      },
+                      y: {
+                        beginAtZero: true,
+                        grid: {
+                          color: 'rgba(0, 0, 0, 0.05)',
+                        },
+                        ticks: {
+                          font: {
+                            size: 11,
+                          },
+                          precision: 0,
+                        },
+                        title: {
+                          display: true,
+                          text: 'Number of Completions',
+                          font: {
+                            size: 12,
+                            weight: '500',
+                          },
+                        },
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg text-slate-800">District-wise Submission Quality & Insights</CardTitle>
+            <CardDescription>Hierarchical view of evidence quality across districts, blocks, and schools</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-2 py-3 font-semibold">District / Block / School</th>
+                    <th className="px-2 py-3 font-semibold">Total</th>
+                    <th className="px-2 py-3 font-semibold">Relevant</th>
+                    <th className="px-2 py-3 font-semibold">Partially Relevant</th>
+                    <th className="px-2 py-3 font-semibold">Irrelevant</th>
+                    <th className="px-2 py-3 font-semibold">% Relevant</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {reportData.sortedDistricts.map(([district, districtData]) => {
+                    const districtScore = relScore(
                       districtData.Relevant,
                       districtData['Partially Relevant'],
                       districtData.total
                     );
+                    const districtExpanded = expandedDistricts.has(district);
+
                     return (
-                      <tr key={district}>
-                        <td>{district}</td>
-                        <td>{formatNumber(districtData.total)}</td>
-                        <td>{formatNumber(districtData.Relevant)}</td>
-                        <td>{formatNumber(districtData['Partially Relevant'])}</td>
-                        <td>{formatNumber(districtData.Irrelevant)}</td>
-                        <td>{score.toFixed(1)}%</td>
-                      </tr>
+                      <Fragment key={district}>
+                        <tr 
+                          className="cursor-pointer hover:bg-slate-50 transition-colors"
+                          onClick={() => toggleDistrict(district)}
+                        >
+                          <td className="px-2 py-3 text-sm font-semibold text-slate-800">
+                            <div className="flex items-center gap-2">
+                              {districtExpanded ? <ChevronDown className="h-4 w-4 text-blue-600" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+                              {district}
+                            </div>
+                          </td>
+                          <td className="px-2 py-3 text-sm text-slate-700">{formatNumber(districtData.total)}</td>
+                          <td className="px-2 py-3 text-sm text-emerald-700 font-medium">{formatNumber(districtData.Relevant)}</td>
+                          <td className="px-2 py-3 text-sm text-amber-700 font-medium">{formatNumber(districtData['Partially Relevant'])}</td>
+                          <td className="px-2 py-3 text-sm text-rose-700 font-medium">{formatNumber(districtData.Irrelevant)}</td>
+                          <td className="px-2 py-3 text-sm">
+                            <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 border border-blue-200">
+                              {districtScore.toFixed(1)}%
+                            </span>
+                          </td>
+                        </tr>
+
+                        {districtExpanded && Object.entries(districtData.blocks).map(([block, blockData]) => {
+                          const blockKey = `${district}||${block}`;
+                          const blockExpanded = expandedBlocks.has(blockKey);
+                          const blockScore = relScore(
+                            blockData.Relevant,
+                            blockData['Partially Relevant'],
+                            blockData.total
+                          );
+
+                          return (
+                            <Fragment key={blockKey}>
+                              <tr 
+                                className="cursor-pointer hover:bg-slate-50 transition-colors bg-slate-50/50"
+                                onClick={() => toggleBlock(district, block)}
+                              >
+                                <td className="px-2 py-3 text-sm font-medium text-slate-700 pl-8">
+                                  <div className="flex items-center gap-2">
+                                    {blockExpanded ? <ChevronDown className="h-4 w-4 text-blue-600" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+                                    {block}
+                                  </div>
+                                </td>
+                                <td className="px-2 py-3 text-sm text-slate-600">{formatNumber(blockData.total)}</td>
+                                <td className="px-2 py-3 text-sm text-emerald-600">{formatNumber(blockData.Relevant)}</td>
+                                <td className="px-2 py-3 text-sm text-amber-600">{formatNumber(blockData['Partially Relevant'])}</td>
+                                <td className="px-2 py-3 text-sm text-rose-600">{formatNumber(blockData.Irrelevant)}</td>
+                                <td className="px-2 py-3 text-sm">
+                                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                    {blockScore.toFixed(1)}%
+                                  </span>
+                                </td>
+                              </tr>
+
+                              {blockExpanded && Object.entries(blockData.schools).map(([school, schoolData]) => {
+                                const schoolScore = relScore(
+                                  schoolData.Relevant,
+                                  schoolData['Partially Relevant'],
+                                  schoolData.total
+                                );
+                                return (
+                                  <tr key={`${blockKey}||${school}`} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-2 py-3 text-sm text-slate-600 pl-14">{school}</td>
+                                    <td className="px-2 py-3 text-sm text-slate-600">{formatNumber(schoolData.total)}</td>
+                                    <td className="px-2 py-3 text-sm text-emerald-600">{formatNumber(schoolData.Relevant)}</td>
+                                    <td className="px-2 py-3 text-sm text-amber-600">{formatNumber(schoolData['Partially Relevant'])}</td>
+                                    <td className="px-2 py-3 text-sm text-rose-600">{formatNumber(schoolData.Irrelevant)}</td>
+                                    <td className="px-2 py-3 text-sm">
+                                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                        {schoolScore.toFixed(1)}%
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </Fragment>
+                          );
+                        })}
+                      </Fragment>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-          </section>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="text-lg text-slate-800">Top Relevance Hierarchy</CardTitle>
+                <CardDescription>
+                  Top performing Districts → Blocks → Schools → Teachers ranked by Relevance %
+                </CardDescription>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <span className="font-medium">Show top:</span>
+                <select
+                  value={topHierarchyCount}
+                  onChange={(event) => {
+                    const nextTopN = Number.parseInt(event.target.value, 10) || 5;
+                    setTopHierarchyCount(nextTopN);
+                    setExpandedTopDistricts(new Set());
+                    setExpandedTopBlocks(new Set());
+                    setExpandedTopSchools(new Set());
+                  }}
+                  className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value={5}>Top 5</option>
+                  <option value={10}>Top 10</option>
+                  <option value={15}>Top 15</option>
+                </select>
+              </label>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-2 py-3 font-semibold">District / Block / School / Teacher</th>
+                    <th className="px-2 py-3 font-semibold">Total Evidence</th>
+                    <th className="px-2 py-3 font-semibold">% Relevant</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visibleTopHierarchy.length > 0 ? (
+                    visibleTopHierarchy.map((district, districtIndex) => {
+                      const districtKey = district.district;
+                      const districtExpanded = expandedTopDistricts.has(districtKey);
+
+                      return (
+                        <Fragment key={districtKey}>
+                          <tr
+                            className="cursor-pointer hover:bg-slate-50 transition-colors"
+                            onClick={() => toggleTopDistrict(districtKey)}
+                          >
+                            <td className="px-2 py-3 text-sm font-semibold text-slate-800">
+                              <div className="flex items-center gap-2">
+                                {districtExpanded ? <ChevronDown className="h-4 w-4 text-blue-600" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold mr-1">
+                                  {districtIndex + 1}
+                                </span>
+                                {district.district}
+                              </div>
+                            </td>
+                            <td className="px-2 py-3 text-sm text-slate-700">{formatNumber(district.total)}</td>
+                            <td className="px-2 py-3 text-sm">
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">
+                                {district.relevancePercent.toFixed(1)}%
+                              </span>
+                            </td>
+                          </tr>
+
+                          {districtExpanded &&
+                            district.blocks.map((block, blockIndex) => {
+                              const blockKey = `${districtKey}||${block.block}`;
+                              const blockExpanded = expandedTopBlocks.has(blockKey);
+
+                              return (
+                                <Fragment key={blockKey}>
+                                  <tr
+                                    className="cursor-pointer hover:bg-slate-50 transition-colors bg-slate-50/50"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      toggleTopBlock(districtKey, block.block);
+                                    }}
+                                  >
+                                    <td className="px-2 py-3 text-sm font-medium text-slate-700 pl-8">
+                                      <div className="flex items-center gap-2">
+                                        {blockExpanded ? <ChevronDown className="h-4 w-4 text-blue-600" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+                                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold mr-1">
+                                          {blockIndex + 1}
+                                        </span>
+                                        {block.block}
+                                      </div>
+                                    </td>
+                                    <td className="px-2 py-3 text-sm text-slate-600">{formatNumber(block.total)}</td>
+                                    <td className="px-2 py-3 text-sm">
+                                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                        {block.relevancePercent.toFixed(1)}%
+                                      </span>
+                                    </td>
+                                  </tr>
+
+                                  {blockExpanded &&
+                                    block.schools.map((school, schoolIndex) => {
+                                      const schoolKey = `${districtKey}||${block.block}||${school.school}`;
+                                      const schoolExpanded = expandedTopSchools.has(schoolKey);
+
+                                      return (
+                                        <Fragment key={schoolKey}>
+                                          <tr
+                                            className="cursor-pointer hover:bg-slate-50 transition-colors"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              toggleTopSchool(districtKey, block.block, school.school);
+                                            }}
+                                          >
+                                            <td className="px-2 py-3 text-sm text-slate-600 pl-14">
+                                              <div className="flex items-center gap-2">
+                                                {schoolExpanded ? <ChevronDown className="h-4 w-4 text-blue-600" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+                                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold mr-1">
+                                                  {schoolIndex + 1}
+                                                </span>
+                                                {school.school}
+                                              </div>
+                                            </td>
+                                            <td className="px-2 py-3 text-sm text-slate-600">{formatNumber(school.total)}</td>
+                                            <td className="px-2 py-3 text-sm">
+                                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                                {school.relevancePercent.toFixed(1)}%
+                                              </span>
+                                            </td>
+                                          </tr>
+
+                                          {schoolExpanded &&
+                                            school.teachers.map((teacher, teacherIndex) => (
+                                              <tr
+                                                key={`${schoolKey}||${teacher.teacher}`}
+                                                className="hover:bg-slate-50 transition-colors"
+                                              >
+                                                <td className="px-2 py-3 text-sm text-slate-600 pl-20">
+                                                  <div className="flex items-center gap-2">
+                                                    <Users className="h-3.5 w-3.5 text-slate-400" />
+                                                    <span className="text-xs font-semibold text-slate-500 mr-1">#{teacherIndex + 1}</span>
+                                                    <code className="text-xs bg-slate-100 px-2 py-0.5 rounded">{teacher.teacher}</code>
+                                                  </div>
+                                                </td>
+                                                <td className="px-2 py-3 text-sm text-slate-600">{formatNumber(teacher.total)}</td>
+                                                <td className="px-2 py-3 text-sm">
+                                                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                                                    {teacher.relevancePercent.toFixed(1)}%
+                                                  </span>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                        </Fragment>
+                                      );
+                                    })}
+                                </Fragment>
+                              );
+                            })}
+                        </Fragment>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={3} className="px-2 py-8 text-center text-sm text-slate-500">
+                        No hierarchy insights available for selected filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {hasRequiredEnrollmentColumns && reportData.hasEnrollmentData && (
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg text-slate-800">Enrollment Analytics</CardTitle>
+              <CardDescription>Review enrollment trends, growth patterns, and district-level comparisons</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h4 className="text-base font-semibold text-slate-800 mb-3">Enrollment Comparison</h4>
+                <p className="text-sm text-slate-600 mb-4">Compare 2024 and 2025 totals along with district-wise distribution.</p>
+
+                <section className="grid gap-4 md:grid-cols-3 mb-6">
+                  <Card className="border-slate-200 shadow-sm">
+                    <CardContent className="p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Enrollment 2024</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-800">{formatNumber(enrollmentSummary.enrollment2024)}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-slate-200 shadow-sm">
+                    <CardContent className="p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Enrollment 2025</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-800">{formatNumber(enrollmentSummary.enrollment2025)}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-slate-200 shadow-sm">
+                    <CardContent className="p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Districts with Data</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-800">{formatNumber(enrollmentSummary.districtCount)}</p>
+                    </CardContent>
+                  </Card>
+                </section>
+
+                <Card className="border-slate-200 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base text-slate-800">Enrollment 2024 vs 2025 by District</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[400px]">
+                      <Bar
+                        data={{
+                          labels: enrollmentDistrictRowsSorted.map((row) => row.district),
+                          datasets: [
+                            {
+                              label: 'Enrollment 2024',
+                              data: enrollmentDistrictRowsSorted.map((row) => row.enrollment2024),
+                              backgroundColor: 'rgba(79, 172, 254, 0.8)',
+                            },
+                            {
+                              label: 'Enrollment 2025',
+                              data: enrollmentDistrictRowsSorted.map((row) => row.enrollment2025),
+                              backgroundColor: 'rgba(66, 230, 149, 0.8)',
+                            },
+                          ],
+                        }}
+                        options={{ responsive: true, maintainAspectRatio: false }}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div>
+                <h4 className="text-base font-semibold text-slate-800 mb-3">Enrollment Growth</h4>
+                <p className="text-sm text-slate-600 mb-4">Inspect district-level growth percentage between 2024 and 2025.</p>
+
+                <Card className="border-slate-200 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base text-slate-800">Enrollment Growth (%) by District</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[400px]">
+                      <Bar
+                        data={{
+                          labels: enrollmentDistrictRowsSorted.map((row) => row.district),
+                          datasets: [
+                            {
+                              label: 'Growth %',
+                              data: enrollmentDistrictRowsSorted.map((row) => row.growth),
+                              backgroundColor: enrollmentDistrictRowsSorted.map((row) =>
+                                row.growth >= 0 ? 'rgba(66, 230, 149, 0.8)' : 'rgba(255, 107, 107, 0.8)'
+                              ),
+                            },
+                          ],
+                        }}
+                        options={{ responsive: true, maintainAspectRatio: false }}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div>
+                <h4 className="text-base font-semibold text-slate-800 mb-3">District Data Table</h4>
+                <p className="text-sm text-slate-600 mb-4">View district totals, differences, and growth values in tabular form.</p>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200">
+                    <thead>
+                      <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                        <th className="px-2 py-3 font-semibold">District</th>
+                        <th className="px-2 py-3 font-semibold">Enrollment 2024</th>
+                        <th className="px-2 py-3 font-semibold">Enrollment 2025</th>
+                        <th className="px-2 py-3 font-semibold">Difference</th>
+                        <th className="px-2 py-3 font-semibold">Growth %</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {enrollmentDistrictRowsSorted.map((row) => (
+                        <tr key={row.district} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-2 py-3 text-sm font-medium text-slate-800">{row.district}</td>
+                          <td className="px-2 py-3 text-sm text-slate-700">{formatNumber(row.enrollment2024)}</td>
+                          <td className="px-2 py-3 text-sm text-slate-700">{formatNumber(row.enrollment2025)}</td>
+                          <td className="px-2 py-3 text-sm text-slate-700">{formatNumber(row.difference)}</td>
+                          <td className="px-2 py-3 text-sm">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+                              row.growth >= 0 
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {row.growth.toFixed(2)}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {reportData.hasCustomTasks && (
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg text-slate-800">User-Owned Tasks Analysis</CardTitle>
+              <CardDescription>Analysis of custom user-created tasks and their relevance distribution</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                      <th className="px-2 py-3 font-semibold">District</th>
+                      <th className="px-2 py-3 font-semibold">Total Custom Tasks</th>
+                      <th className="px-2 py-3 font-semibold">Relevant</th>
+                      <th className="px-2 py-3 font-semibold">Partially Relevant</th>
+                      <th className="px-2 py-3 font-semibold">Irrelevant</th>
+                      <th className="px-2 py-3 font-semibold">% Relevant</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {Object.entries(reportData.customTaskHierarchy).map(([district, districtData]) => {
+                      const score = relScore(
+                        districtData.Relevant,
+                        districtData['Partially Relevant'],
+                        districtData.total
+                      );
+                      return (
+                        <tr key={district} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-2 py-3 text-sm font-medium text-slate-800">{district}</td>
+                          <td className="px-2 py-3 text-sm text-slate-700">{formatNumber(districtData.total)}</td>
+                          <td className="px-2 py-3 text-sm text-emerald-700 font-medium">{formatNumber(districtData.Relevant)}</td>
+                          <td className="px-2 py-3 text-sm text-amber-700 font-medium">{formatNumber(districtData['Partially Relevant'])}</td>
+                          <td className="px-2 py-3 text-sm text-rose-700 font-medium">{formatNumber(districtData.Irrelevant)}</td>
+                          <td className="px-2 py-3 text-sm">
+                            <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 border border-blue-200">
+                              {score.toFixed(1)}%
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

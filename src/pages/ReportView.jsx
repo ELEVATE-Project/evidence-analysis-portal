@@ -4,7 +4,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import StandardReportRenderer from '../components/reports/StandardReportRenderer';
-import { getApiErrorMessage, reportService } from '../services/executionService';
+import { getApiErrorMessage, reportService, executionService } from '../services/executionService';
 
 const ReportView = () => {
   const { id: executionId } = useParams();
@@ -14,9 +14,10 @@ const ReportView = () => {
   const [csvText, setCsvText] = useState('');
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [executionName, setExecutionName] = useState('');
 
   useEffect(() => {
-    const loadReportCsv = async () => {
+    const loadReportData = async () => {
       if (!executionId) {
         setError('Missing execution id in URL.');
         setLoading(false);
@@ -26,17 +27,24 @@ const ReportView = () => {
       setLoading(true);
       setError('');
       try {
-        const csvContent = await reportService.getReportCsv(executionId);
+        // Fetch execution details and CSV in parallel
+        const [executionDetails, csvContent] = await Promise.all([
+          executionService.getExecution(executionId),
+          reportService.getReportCsv(executionId),
+        ]);
+        
+        setExecutionName(executionDetails?.name || 'Unnamed Execution');
         setCsvText(typeof csvContent === 'string' ? csvContent : '');
       } catch (requestError) {
         setCsvText('');
-        setError(getApiErrorMessage(requestError, 'Unable to load report CSV.'));
+        setExecutionName('');
+        setError(getApiErrorMessage(requestError, 'Unable to load report data.'));
       } finally {
         setLoading(false);
       }
     };
 
-    void loadReportCsv();
+    void loadReportData();
   }, [executionId, reloadKey]);
 
   if (loading) {
@@ -75,7 +83,7 @@ const ReportView = () => {
     );
   }
 
-  return <StandardReportRenderer csvText={csvText} sourceLabel={`Execution Report: ${executionId}`} />;
+  return <StandardReportRenderer csvText={csvText} sourceLabel={`Analysis Report - ${executionName}`} />;
 };
 
 export default ReportView;
