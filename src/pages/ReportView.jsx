@@ -83,7 +83,7 @@ const ReportView = () => {
     );
   }
 
-  return <StandardReportRenderer csvText={csvText} sourceLabel={`${executionName}`} />;
+  return <StandardReportRenderer csvText={csvText} sourceLabel={`Analysis Report - ${executionName}`} />;
 };
 
 export default ReportView;

@@ -62,6 +62,19 @@ const emptyFilters = {
   relevance: '',
 };
 
+const PDF_HEADER_HEIGHT_MM = 15;
+const PDF_FOOTER_HEIGHT_MM = 15;
+const PDF_MARGIN_MM = 10;
+const PDF_SECTION_GAP_MM = 5;
+
+const formatPdfTimestamp = () => new Date().toLocaleString('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 const relScore = (relevant, partiallyRelevant, total) => {
   if (!total) return 0;
   return ((relevant + partiallyRelevant * 0.5) / total) * 100;
@@ -744,36 +757,112 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
     }
 
     setPdfLoading(true);
-    try {
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
-      const imageData = canvas.toDataURL('image/png');
+    const reportElement = reportRef.current;
 
+    try {
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
+      const contentWidth = pdfWidth - (PDF_MARGIN_MM * 2);
+      const contentAreaHeight = pdfHeight - PDF_HEADER_HEIGHT_MM - PDF_FOOTER_HEIGHT_MM;
+      const contentBottomY = PDF_HEADER_HEIGHT_MM + contentAreaHeight;
 
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const reportName = sourceLabel?.startsWith('Analysis Report - ')
+        ? sourceLabel
+        : `Analysis Report - ${sourceLabel || 'Unnamed Execution'}`;
+      const timestamp = formatPdfTimestamp();
+      const systemName = 'Evidence Analysis System';
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      const addHeader = () => {
+        pdf.setTextColor(15, 23, 42);
+        pdf.setFontSize(10);
+        pdf.setFont(undefined, 'bold');
+        pdf.text(reportName, pdfWidth / 2, 10, { align: 'center' });
+      };
 
-      pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      const addFooter = (currentPage, totalPages) => {
+        const footerY = pdfHeight - 8;
+        pdf.setTextColor(71, 85, 105);
+        pdf.setFontSize(8);
+        pdf.setFont(undefined, 'normal');
+        pdf.setDrawColor(203, 213, 225);
+        pdf.setLineWidth(0.5);
+        pdf.line(PDF_MARGIN_MM, pdfHeight - PDF_FOOTER_HEIGHT_MM + 2, pdfWidth - PDF_MARGIN_MM, pdfHeight - PDF_FOOTER_HEIGHT_MM + 2);
+        
+        pdf.text(`Page ${currentPage} of ${totalPages}`, PDF_MARGIN_MM, footerY);
+        pdf.text(`Generated: ${timestamp}`, pdfWidth / 2, footerY, { align: 'center' });
+        pdf.text(systemName, pdfWidth - PDF_MARGIN_MM, footerY, { align: 'right' });
+      };
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
+      let yPosition = PDF_HEADER_HEIGHT_MM;
+
+      const startNewPage = () => {
+        if (pdf.internal.getNumberOfPages() > 1 || yPosition > PDF_HEADER_HEIGHT_MM) {
+          pdf.addPage();
+        }
+        addHeader();
+        yPosition = PDF_HEADER_HEIGHT_MM;
+      };
+
+      const renderSectionCanvas = (section) => html2canvas(section, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: Math.max(document.documentElement.clientWidth, section.scrollWidth),
+        onclone: (clonedDocument, clonedSection) => {
+          clonedSection.classList.add('report-pdf-section-clone');
+          clonedDocument.querySelectorAll('.overflow-x-auto, .overflow-y-visible').forEach((element) => {
+            element.style.overflow = 'visible';
+          });
+          clonedDocument.querySelectorAll('table').forEach((table) => {
+            table.style.width = '100%';
+            table.style.tableLayout = 'auto';
+          });
+        },
+      });
+
+      reportElement.classList.add('report-pdf-exporting');
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const sections = Array.from(reportElement.children).filter((section) => {
+        const rect = section.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+
+      addHeader();
+      
+      for (const section of sections) {
+        const canvas = await renderSectionCanvas(section);
+        const imageData = canvas.toDataURL('image/png');
+        const naturalWidth = contentWidth;
+        const naturalHeight = (canvas.height * naturalWidth) / canvas.width;
+        let renderWidth = naturalWidth;
+        let renderHeight = naturalHeight;
+
+        if (renderHeight > contentAreaHeight) {
+          const scaleToPage = contentAreaHeight / renderHeight;
+          renderHeight = contentAreaHeight;
+          renderWidth = naturalWidth * scaleToPage;
+        }
+
+        if (yPosition > PDF_HEADER_HEIGHT_MM && yPosition + renderHeight > contentBottomY) {
+          startNewPage();
+        }
+
+        const xPosition = PDF_MARGIN_MM + ((contentWidth - renderWidth) / 2);
+        pdf.addImage(imageData, 'PNG', xPosition, yPosition, renderWidth, renderHeight);
+        yPosition += renderHeight + PDF_SECTION_GAP_MM;
+      }
+
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        pdf.setPage(pageNum);
+        addFooter(pageNum, totalPages);
       }
 
       pdf.save('evidence-analysis-report.pdf');
     } finally {
+      reportElement.classList.remove('report-pdf-exporting');
       setPdfLoading(false);
     }
   };
