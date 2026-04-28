@@ -19,6 +19,7 @@ import jsPDF from 'jspdf';
 import { Download, Filter, BarChart3, Users, School, Building2, FileText, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import DistrictRelevanceMap from './DistrictRelevanceMap';
 import './standard-report.css';
 
 ChartJS.register(
@@ -217,6 +218,8 @@ const computeReportData = (rows) => {
   };
 
   const districtHierarchy = {};
+  const stateSummaries = {};
+  const stateDistrictStats = {};
 
   const teacherMap = {};
   const enrollment = {};
@@ -238,6 +241,7 @@ const computeReportData = (rows) => {
 
     const state = normalizeValue(row['Declared State']);
     if (state) statesSet.add(state.toUpperCase());
+    const stateName = state || 'Unknown State';
 
     if (RELEVANCE_TYPES.includes(relevanceTag)) {
       relevanceCounts[relevanceTag] += 1;
@@ -247,6 +251,19 @@ const computeReportData = (rows) => {
     if (school) schoolsSet.add(school);
     if (district) districtsSet.add(district);
     if (block) blocksSet.add(block);
+
+    if (!stateSummaries[stateName]) {
+      stateSummaries[stateName] = createNode();
+    }
+    updateNode(stateSummaries[stateName], relevanceTag);
+
+    if (!stateDistrictStats[stateName]) {
+      stateDistrictStats[stateName] = {};
+    }
+    if (!stateDistrictStats[stateName][district]) {
+      stateDistrictStats[stateName][district] = createNode();
+    }
+    updateNode(stateDistrictStats[stateName][district], relevanceTag);
 
     const subject = parseSubject(task);
     const grade = parseGrade(task);
@@ -507,6 +524,8 @@ const computeReportData = (rows) => {
     submissionRelevant: submissionLabels.map((label) => relevant[label] || 0),
     taskEntries,
     districtHierarchy,
+    stateSummaries,
+    stateDistrictStats,
     sortedDistricts,
     topHierarchy,
     hasEnrollmentData,
@@ -547,6 +566,61 @@ const wrapChartLabel = (label, maxLineLength = 18, maxLines = 3) => {
   const visibleLines = lines.slice(0, maxLines);
   visibleLines[maxLines - 1] = `${visibleLines[maxLines - 1].replace(/\.+$/, '')}...`;
   return visibleLines;
+};
+
+const mapSvgToCanvas = (svgElement) => new Promise((resolve, reject) => {
+  const rect = svgElement.getBoundingClientRect();
+  const width = Math.max(1, Math.ceil(rect.width));
+  const height = Math.max(1, Math.ceil(rect.height));
+  const serializedSvg = new XMLSerializer().serializeToString(svgElement);
+  const svgBlob = new Blob([serializedSvg], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+  const image = new Image();
+
+  image.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    canvas.className = svgElement.className?.baseVal || svgElement.className || '';
+    const context = canvas.getContext('2d');
+    context.scale(2, 2);
+    context.drawImage(image, 0, 0, width, height);
+    URL.revokeObjectURL(url);
+    resolve(canvas);
+  };
+
+  image.onerror = () => {
+    URL.revokeObjectURL(url);
+    reject(new Error('Unable to prepare map SVG for PDF capture.'));
+  };
+
+  image.src = url;
+});
+
+const replaceMapSvgsForPdf = async (rootElement) => {
+  const replacements = [];
+  const mapSvgs = Array.from(rootElement.querySelectorAll('.report-map-svg'));
+
+  for (const svgElement of mapSvgs) {
+    const canvas = await mapSvgToCanvas(svgElement);
+    const parent = svgElement.parentNode;
+    const nextSibling = svgElement.nextSibling;
+    parent.replaceChild(canvas, svgElement);
+    replacements.push({ parent, svgElement, canvas, nextSibling });
+  }
+
+  return () => {
+    replacements.forEach(({ parent, svgElement, canvas, nextSibling }) => {
+      if (canvas.parentNode === parent) {
+        parent.replaceChild(svgElement, canvas);
+      }
+      if (nextSibling && svgElement.nextSibling !== nextSibling && nextSibling.parentNode === parent) {
+        parent.insertBefore(svgElement, nextSibling);
+      }
+    });
+  };
 };
 
 const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
@@ -860,7 +934,13 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
       addHeader();
       
       for (const section of sections) {
-        const canvas = await renderSectionCanvas(section);
+        const restoreMapSvgs = await replaceMapSvgsForPdf(section);
+        let canvas;
+        try {
+          canvas = await renderSectionCanvas(section);
+        } finally {
+          restoreMapSvgs();
+        }
         const imageData = canvas.toDataURL('image/png');
         const naturalWidth = contentWidth;
         const naturalHeight = (canvas.height * naturalWidth) / canvas.width;
@@ -1439,6 +1519,16 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardContent className="p-4 sm:p-6">
+            <DistrictRelevanceMap
+              selectedState={filters.state}
+              stateSummaries={reportData.stateSummaries}
+              stateDistrictStats={reportData.stateDistrictStats}
+            />
           </CardContent>
         </Card>
 

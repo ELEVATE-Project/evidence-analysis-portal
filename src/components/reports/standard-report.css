@@ -36,6 +36,106 @@ canvas {
   max-width: 100% !important;
 }
 
+.report-map-section {
+  position: relative;
+  width: 100%;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+}
+
+.report-map-title {
+  margin: 0;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.report-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  margin-top: 1.25rem;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+.report-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.report-map-legend i {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.report-map-frame {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 400px;
+  height: auto;
+  max-height: 480px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+  padding-top: 1rem;
+}
+
+.report-map-svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 460px;
+}
+
+.report-map-region {
+  cursor: pointer;
+  transition: filter 160ms ease, stroke-width 160ms ease;
+}
+
+.report-map-region:hover {
+  filter: brightness(0.93);
+  stroke: #0f172a;
+  stroke-width: 2;
+}
+
+.report-map-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  width: 100%;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.report-map-tooltip {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0;
+  max-width: 260px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #ffffff;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  transition: opacity 0.3s;
+}
+
+.report-map-tooltip.is-visible {
+  opacity: 1;
+}
+
 /* Prevent chart overflow on mobile devices */
 @media (max-width: 640px) {
   .report-chart-container,
@@ -73,6 +173,14 @@ canvas {
 
   .overflow-x-auto {
     overflow-x: visible !important;
+  }
+
+  .report-map-tooltip {
+    display: none !important;
+  }
+
+  .report-map-frame {
+    max-height: none;
   }
 
   table {
