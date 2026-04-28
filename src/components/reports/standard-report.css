@@ -39,16 +39,18 @@ canvas {
 .report-map-section {
   position: relative;
   width: 100%;
-  margin-top: 1.5rem;
-  padding-top: 1rem;
+  padding: 0.25rem 0 0.5rem;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .report-map-title {
-  margin: 0;
+  margin: 0 0 0.85rem;
   text-align: center;
   font-size: 1.25rem;
   font-weight: 700;
   color: #475569;
+  line-height: 1.25;
 }
 
 .report-map-legend {
@@ -57,7 +59,7 @@ canvas {
   justify-content: center;
   gap: 0.75rem 1.25rem;
   align-items: center;
-  margin-top: 1.25rem;
+  margin-top: 0.9rem;
   font-size: 0.875rem;
   color: #334155;
 }
@@ -78,22 +80,23 @@ canvas {
 .report-map-frame {
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   width: 100%;
-  min-height: 400px;
-  height: auto;
-  max-height: 480px;
+  min-height: 0;
+  height: 380px;
+  max-height: 380px;
   overflow: hidden;
   border-radius: 8px;
   background: #ffffff;
-  padding-top: 1rem;
+  padding: 0;
 }
 
 .report-map-svg {
   display: block;
-  width: 100%;
-  max-width: 100%;
-  max-height: 460px;
+  width: min(100%, 600px);
+  height: 365px;
+  max-width: 600px;
+  max-height: 365px;
 }
 
 .report-map-region {
@@ -142,6 +145,25 @@ canvas {
   [style*="height: 350px"] {
     min-height: 280px !important;
   }
+
+  .report-map-title {
+    font-size: 1.05rem;
+  }
+
+  .report-map-frame {
+    height: 320px;
+    max-height: 320px;
+  }
+
+  .report-map-svg {
+    height: 305px;
+    max-height: 305px;
+  }
+
+  .report-map-legend {
+    gap: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+  }
 }
 
 /* Print-specific styles */
@@ -180,7 +202,13 @@ canvas {
   }
 
   .report-map-frame {
-    max-height: none;
+    height: 380px;
+    max-height: 380px;
+  }
+
+  .report-map-svg {
+    height: 365px;
+    max-height: 365px;
   }
 
   table {

@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 const MAP_MATCH_THRESHOLD = 0.35;
 const MAP_WIDTH = 800;
-const MAP_HEIGHT = 560;
+const MAP_HEIGHT = 600;
 const MAP_PADDING = 20;
 
 const SCORE_COLORS = {
