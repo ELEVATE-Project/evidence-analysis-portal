@@ -797,7 +797,7 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
         <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-slate-800">Evidence Analysis Report</h2>
+              <h2 className="text-xl sm:text-2xl font-semibold text-slate-800">Analysis Report</h2>
               <p className="mt-1 text-sm text-slate-600">{sourceLabel}</p>
             </div>
             <Button 
