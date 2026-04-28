@@ -1331,76 +1331,119 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
             <CardTitle className="text-lg text-slate-800">Task Completion Analysis</CardTitle>
             <CardDescription>Top tasks by completion count</CardDescription>
           </CardHeader>
-          <CardContent className="p-6">
-            <div className="w-full" style={{ height: '400px' }}>
-              <Bar
-                data={{
-                  labels: reportData.taskEntries.map(([task]) => task),
-                  datasets: [
-                    {
-                      label: 'Task Completion Count',
-                      data: reportData.taskEntries.map(([, count]) => count),
-                      backgroundColor: 'rgba(79, 172, 254, 0.8)',
-                      borderColor: '#4facfe',
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  indexAxis: 'y',
-                  plugins: {
-                    legend: {
-                      display: false,
-                    },
-                    tooltip: {
-                      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                      padding: 12,
-                      titleFont: {
-                        size: 13,
+          <CardContent className="p-4 sm:p-6">
+            <div className="w-full overflow-x-auto overflow-y-visible">
+              <div style={{ 
+                minHeight: '500px', 
+                height: `${Math.max(500, reportData.taskEntries.length * 50)}px`,
+                minWidth: '800px'
+              }}>
+                <Bar
+                  data={{
+                    labels: reportData.taskEntries.map(([task]) => task),
+                    datasets: [
+                      {
+                        label: 'Task Completion Count',
+                        data: reportData.taskEntries.map(([, count]) => count),
+                        backgroundColor: 'rgba(79, 172, 254, 0.8)',
+                        borderColor: '#4facfe',
+                        borderWidth: 2,
                       },
-                      bodyFont: {
-                        size: 12,
-                      },
-                    },
-                  },
-                  scales: {
-                    x: {
-                      beginAtZero: true,
-                      grid: {
-                        color: 'rgba(0, 0, 0, 0.05)',
-                      },
-                      ticks: {
-                        font: {
-                          size: 11,
-                        },
-                      },
-                      title: {
-                        display: true,
-                        text: 'Number of Completions',
-                        font: {
-                          size: 12,
-                        },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    layout: {
+                      padding: {
+                        left: 20,
+                        right: 30,
+                        top: 15,
+                        bottom: 15,
                       },
                     },
-                    y: {
-                      grid: {
+                    plugins: {
+                      legend: {
                         display: false,
                       },
-                      ticks: {
-                        font: {
-                          size: 10,
+                      tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                        padding: 14,
+                        titleFont: {
+                          size: 13,
+                          weight: '600',
                         },
-                        callback(value) {
-                          const label = this.getLabelForValue(value);
-                          return label.length > 50 ? `${label.slice(0, 50)}...` : label;
+                        bodyFont: {
+                          size: 12,
+                        },
+                        displayColors: false,
+                        callbacks: {
+                          title: (context) => {
+                            const label = context[0].label;
+                            // Split long labels into multiple lines for tooltip
+                            const maxLength = 70;
+                            if (label.length <= maxLength) return label;
+                            const words = label.split(' ');
+                            const lines = [];
+                            let currentLine = '';
+                            words.forEach(word => {
+                              if ((currentLine + word).length > maxLength) {
+                                lines.push(currentLine.trim());
+                                currentLine = word + ' ';
+                              } else {
+                                currentLine += word + ' ';
+                              }
+                            });
+                            if (currentLine) lines.push(currentLine.trim());
+                            return lines;
+                          },
                         },
                       },
                     },
-                  },
-                }}
-              />
+                    scales: {
+                      x: {
+                        beginAtZero: true,
+                        grid: {
+                          color: 'rgba(0, 0, 0, 0.05)',
+                        },
+                        ticks: {
+                          font: {
+                            size: 11,
+                          },
+                          precision: 0,
+                        },
+                        title: {
+                          display: true,
+                          text: 'Number of Completions',
+                          font: {
+                            size: 12,
+                            weight: '500',
+                          },
+                          padding: {
+                            top: 10,
+                          },
+                        },
+                      },
+                      y: {
+                        grid: {
+                          display: false,
+                        },
+                        ticks: {
+                          font: {
+                            size: 10,
+                          },
+                          padding: 10,
+                          autoSkip: false,
+                          maxRotation: 0,
+                          minRotation: 0,
+                          crossAlign: 'far',
+                        },
+                      },
+                    },
+                  }}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
