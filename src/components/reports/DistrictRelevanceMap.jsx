@@ -14,9 +14,10 @@ const SCORE_COLORS = {
 };
 
 const DISTRICT_PROPERTY_KEYS = [
+  'DISTRICT',
+  'ST_NM',
   'district_name',
   'district',
-  'DISTRICT',
   'District',
   'dtname',
   'DT_NAME',
@@ -24,11 +25,6 @@ const DISTRICT_PROPERTY_KEYS = [
   'name',
   'NAME',
 ];
-
-const REFERENCE_GEOJSON_URLS = {
-  bihar: 'https://raw.githubusercontent.com/Vivek-M-08/maps/main/states/bihar.geojson',
-  haryana: 'https://raw.githubusercontent.com/Vivek-M-08/maps/main/states/haryana.geojson',
-};
 
 const DISTRICT_ALIASES = {
   bihar: {
@@ -40,6 +36,22 @@ const DISTRICT_ALIASES = {
     gurugram: ['gurgaon'],
     'charkhi dadri': ['dadri'],
   },
+};
+
+const STATE_SLUG_ALIASES = {
+  'andaman-and-nicobar-island': 'andaman-and-nicobar-islands',
+  'andaman-nicobar-island': 'andaman-and-nicobar-islands',
+  'andaman-nicobar-islands': 'andaman-and-nicobar-islands',
+  'arunanchal-pradesh': 'arunachal-pradesh',
+  'dadra-nagar-haveli-and-daman-diu': 'dadra-and-nagar-haveli-and-daman-and-diu',
+  'dadra-and-nagar-haveli-daman-and-diu': 'dadra-and-nagar-haveli-and-daman-and-diu',
+  delhi: 'delhi',
+  'nct-of-delhi': 'delhi',
+  orissa: 'odisha',
+  pondicherry: 'puducherry',
+  uttaranchal: 'uttarakhand',
+  'jammu-kashmir': 'jammu-and-kashmir',
+  'jammu-and-kashmir': 'jammu-and-kashmir',
 };
 
 const cloneNode = (node) => ({
@@ -58,7 +70,10 @@ const normalizeMapName = (value) => String(value || '')
   .replace(/[^a-zA-Z0-9]+/g, ' ')
   .trim();
 
-const slugifyState = (stateName) => normalizeMapName(stateName).replace(/\s+/g, '-');
+const slugifyState = (stateName) => {
+  const slug = normalizeMapName(stateName).replace(/\s+/g, '-');
+  return STATE_SLUG_ALIASES[slug] || slug;
+};
 
 const getScore = (stats) => {
   if (!stats?.total) return 0;
@@ -220,52 +235,47 @@ const useStateGeoJson = (stateName) => {
     setStatus('loading');
     setGeoJson(null);
 
+    const indexUrl = `${import.meta.env.BASE_URL}maps/states/index.json`;
     const localUrl = `${import.meta.env.BASE_URL}maps/states/${stateSlug}.geojson`;
-    const referenceUrl = REFERENCE_GEOJSON_URLS[stateSlug];
 
-    fetch(localUrl, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Local map asset unavailable (${response.status})`);
+    const loadLocalAsset = async () => {
+      try {
+        const indexResponse = await fetch(indexUrl, {
+          signal: controller.signal,
+          headers: { Accept: 'application/json' },
+        });
+        if (!indexResponse.ok) {
+          throw new Error(`Map index unavailable (${indexResponse.status})`);
         }
-        return response.json();
-      })
-      .then((nextGeoJson) => {
+
+        const mapIndex = await indexResponse.json();
+        const hasStateAsset = Array.isArray(mapIndex?.states)
+          && mapIndex.states.some((state) => state.slug === stateSlug);
+
+        if (!hasStateAsset) {
+          throw new Error(`Map asset not listed for ${stateSlug}`);
+        }
+
+        const geoJsonResponse = await fetch(localUrl, {
+          signal: controller.signal,
+          headers: { Accept: 'application/json' },
+        });
+        if (!geoJsonResponse.ok) {
+          throw new Error(`Local map asset unavailable (${geoJsonResponse.status})`);
+        }
+
+        const nextGeoJson = await geoJsonResponse.json();
         setGeoJson(nextGeoJson);
         setStatus('ready');
-      })
-      .catch(async (error) => {
-        if (error.name === 'AbortError') {
-          return;
-        }
-
-        if (!referenceUrl) {
+      } catch (error) {
+        if (error.name !== 'AbortError') {
           setStatus('missing');
           setGeoJson(null);
-          return;
         }
+      }
+    };
 
-        try {
-          const response = await fetch(referenceUrl, {
-            signal: controller.signal,
-            headers: { Accept: 'application/json' },
-          });
-          if (!response.ok) {
-            throw new Error(`Reference map asset unavailable (${response.status})`);
-          }
-          const nextGeoJson = await response.json();
-          setGeoJson(nextGeoJson);
-          setStatus('ready');
-        } catch (referenceError) {
-          if (referenceError.name !== 'AbortError') {
-            setStatus('missing');
-            setGeoJson(null);
-          }
-        }
-      });
+    loadLocalAsset();
 
     return () => controller.abort();
   }, [stateSlug]);
