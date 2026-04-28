@@ -521,6 +521,34 @@ const formatNumber = (value) => {
   return value.toLocaleString('en-IN');
 };
 
+const wrapChartLabel = (label, maxLineLength = 18, maxLines = 3) => {
+  const words = String(label || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let currentLine = '';
+
+  words.forEach((word) => {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    if (nextLine.length > maxLineLength && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = nextLine;
+    }
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+
+  const visibleLines = lines.slice(0, maxLines);
+  visibleLines[maxLines - 1] = `${visibleLines[maxLines - 1].replace(/\.+$/, '')}...`;
+  return visibleLines;
+};
+
 const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
   const reportRef = useRef(null);
 
@@ -1423,9 +1451,8 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
           <CardContent className="p-4 sm:p-6">
             <div className="w-full overflow-x-auto overflow-y-visible">
               <div style={{ 
-                minHeight: '500px', 
-                height: `${Math.max(500, reportData.taskEntries.length * 50)}px`,
-                minWidth: '800px'
+                height: '560px',
+                minWidth: `${Math.max(760, reportData.taskEntries.length * 150)}px`
               }}>
                 <Bar
                   data={{
@@ -1443,13 +1470,12 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
-                    indexAxis: 'y',
                     layout: {
                       padding: {
                         left: 20,
                         right: 30,
                         top: 15,
-                        bottom: 15,
+                        bottom: 20,
                       },
                     },
                     plugins: {
@@ -1468,30 +1494,41 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
                         },
                         displayColors: false,
                         callbacks: {
-                          title: (context) => {
-                            const label = context[0].label;
-                            // Split long labels into multiple lines for tooltip
-                            const maxLength = 70;
-                            if (label.length <= maxLength) return label;
-                            const words = label.split(' ');
-                            const lines = [];
-                            let currentLine = '';
-                            words.forEach(word => {
-                              if ((currentLine + word).length > maxLength) {
-                                lines.push(currentLine.trim());
-                                currentLine = word + ' ';
-                              } else {
-                                currentLine += word + ' ';
-                              }
-                            });
-                            if (currentLine) lines.push(currentLine.trim());
-                            return lines;
-                          },
+                          title: (context) => context[0]?.label || '',
+                          label: (context) => `Completions: ${formatNumber(context.parsed.y)}`,
                         },
                       },
                     },
                     scales: {
                       x: {
+                        grid: {
+                          display: false,
+                        },
+                        ticks: {
+                          autoSkip: false,
+                          maxRotation: 0,
+                          minRotation: 0,
+                          padding: 8,
+                          font: {
+                            size: 10,
+                          },
+                          callback: function callback(value) {
+                            return wrapChartLabel(this.getLabelForValue(value));
+                          },
+                        },
+                        title: {
+                          display: true,
+                          text: 'Tasks',
+                          font: {
+                            size: 12,
+                            weight: '500',
+                          },
+                          padding: {
+                            top: 14,
+                          },
+                        },
+                      },
+                      y: {
                         beginAtZero: true,
                         grid: {
                           color: 'rgba(0, 0, 0, 0.05)',
@@ -1509,24 +1546,6 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
                             size: 12,
                             weight: '500',
                           },
-                          padding: {
-                            top: 10,
-                          },
-                        },
-                      },
-                      y: {
-                        grid: {
-                          display: false,
-                        },
-                        ticks: {
-                          font: {
-                            size: 10,
-                          },
-                          padding: 10,
-                          autoSkip: false,
-                          maxRotation: 0,
-                          minRotation: 0,
-                          crossAlign: 'far',
                         },
                       },
                     },
