@@ -558,7 +558,7 @@ const Dashboard = () => {
 
                               {statusGroup === 'completed' && (
                                 <>
-                                  {/* Hidden for demo
+                                  {/* Hidden for demo */}
                                   <Button
                                     type="button"
                                     className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
@@ -567,7 +567,7 @@ const Dashboard = () => {
                                     <FileText className="mr-1.5 h-3.5 w-3.5" />
                                     View Report
                                   </Button>
-                                  */}
+                                 
                                   <Button
                                     type="button"
                                     variant="outline"

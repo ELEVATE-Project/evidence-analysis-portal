@@ -797,10 +797,10 @@ const StandardReportRenderer = ({ csvText, sourceLabel = 'Report CSV' }) => {
           <h2>MIP Evidence Analysis Dashboard</h2>
           <p>{sourceLabel}</p>
         </div>
-        <Button type="button" onClick={downloadPdf} disabled={pdfLoading} className="report-download-btn">
+        {/* <Button type="button" onClick={downloadPdf} disabled={pdfLoading} className="report-download-btn">
           <Download className="h-4 w-4" />
           {pdfLoading ? 'Generating PDF...' : 'Download PDF'}
-        </Button>
+        </Button> */}
       </div>
 
       <div className="report-filter-panel">
