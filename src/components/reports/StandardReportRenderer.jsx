@@ -67,6 +67,7 @@ const PDF_HEADER_HEIGHT_MM = 15;
 const PDF_FOOTER_HEIGHT_MM = 15;
 const PDF_MARGIN_MM = 10;
 const PDF_SECTION_GAP_MM = 5;
+const PDF_MAX_TABLE_ROWS = 200;
 
 const formatPdfTimestamp = () => new Date().toLocaleString('en-US', {
   year: 'numeric',
@@ -531,6 +532,7 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
   const [expandedTopBlocks, setExpandedTopBlocks] = useState(new Set());
   const [expandedTopSchools, setExpandedTopSchools] = useState(new Set());
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState(0);
 
   // Async computation state for the local CSV path
   const [computedData, setComputedData] = useState(null);
@@ -645,7 +647,7 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
     });
 
     return () => { cancelled = true; };
-  }, [filteredRows, usingApiData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filteredRows, usingApiData]);
 
   const reportData = useMemo(() => {
     if (usingApiData) {
@@ -934,6 +936,7 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
     }
 
     setPdfLoading(true);
+    setPdfProgress(0);
     const reportElement = reportRef.current;
 
     try {
@@ -982,18 +985,29 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
       };
 
       const renderSectionCanvas = (section) => html2canvas(section, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         backgroundColor: '#ffffff',
+        removeContainer: true,
         windowWidth: Math.max(document.documentElement.clientWidth, section.scrollWidth),
         onclone: (clonedDocument, clonedSection) => {
           clonedSection.classList.add('report-pdf-section-clone');
-          clonedDocument.querySelectorAll('.overflow-x-auto, .overflow-y-visible').forEach((element) => {
-            element.style.overflow = 'visible';
+          clonedDocument.querySelectorAll('.overflow-x-auto, .overflow-y-visible').forEach((el) => {
+            el.style.overflow = 'visible';
           });
           clonedDocument.querySelectorAll('table').forEach((table) => {
             table.style.width = '100%';
             table.style.tableLayout = 'auto';
+          });
+          // Cap table rows to prevent recursive DOM traversal stack overflow on large datasets
+          clonedDocument.querySelectorAll('tbody').forEach((tbody) => {
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            if (rows.length > PDF_MAX_TABLE_ROWS) {
+              rows.slice(PDF_MAX_TABLE_ROWS).forEach((row) => row.remove());
+              const note = clonedDocument.createElement('tr');
+              note.innerHTML = `<td colspan="99" style="padding:6px 8px;font-size:11px;color:#64748b;text-align:center;font-style:italic;">… ${(rows.length - PDF_MAX_TABLE_ROWS).toLocaleString()} more rows — view full data online</td>`;
+              tbody.appendChild(note);
+            }
           });
         },
       });
@@ -1008,23 +1022,29 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
 
       addHeader();
 
-      // Render all section canvases in parallel (each operates on an independent DOM subtree)
-      const canvases = await Promise.all(
-        sections.map(async (section) => {
-          const restoreMapSvgs = await replaceMapSvgsForPdf(section);
-          let canvas;
-          try {
-            canvas = await renderSectionCanvas(section);
-          } finally {
-            restoreMapSvgs();
-          }
-          return canvas;
-        })
-      );
+      // Process sections sequentially to avoid concurrent recursive DOM traversals that
+      // overflow the call stack on large datasets. Yield between each to allow GC to run.
+      const canvases = [];
+      for (let i = 0; i < sections.length; i++) {
+        const section = sections[i];
+        const restoreMapSvgs = await replaceMapSvgsForPdf(section);
+        let canvas;
+        try {
+          canvas = await renderSectionCanvas(section);
+        } finally {
+          restoreMapSvgs();
+        }
+        canvases.push(canvas);
+        setPdfProgress(Math.round(((i + 1) / sections.length) * 80));
+        // Yield to let the event loop breathe and GC reclaim the previous canvas memory
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
 
       // Place canvases onto PDF pages sequentially (order matters for layout)
       for (const canvas of canvases) {
-        const imageData = canvas.toDataURL('image/png');
+        // JPEG at 0.85 quality: ~5× smaller than PNG, dramatically reduces PDF file size and
+        // peak memory during encoding. Quality is visually indistinguishable for report content.
+        const imageData = canvas.toDataURL('image/jpeg', 0.85);
         const naturalWidth = contentWidth;
         const naturalHeight = (canvas.height * naturalWidth) / canvas.width;
         let renderWidth = naturalWidth;
@@ -1041,9 +1061,11 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
         }
 
         const xPosition = PDF_MARGIN_MM + ((contentWidth - renderWidth) / 2);
-        pdf.addImage(imageData, 'PNG', xPosition, yPosition, renderWidth, renderHeight);
+        pdf.addImage(imageData, 'JPEG', xPosition, yPosition, renderWidth, renderHeight);
         yPosition += renderHeight + PDF_SECTION_GAP_MM;
       }
+
+      setPdfProgress(95);
 
       const totalPages = pdf.internal.getNumberOfPages();
       for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
@@ -1051,10 +1073,12 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
         addFooter(pageNum, totalPages);
       }
 
+      setPdfProgress(100);
       pdf.save('evidence-analysis-report.pdf');
     } finally {
       reportElement.classList.remove('report-pdf-exporting');
       setPdfLoading(false);
+      setPdfProgress(0);
     }
   };
 
@@ -1118,7 +1142,7 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
               className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
             >
               <Download className="mr-2 h-4 w-4" />
-              {pdfLoading ? 'Generating PDF...' : 'Download PDF'}
+              {pdfLoading ? `Generating PDF${pdfProgress > 0 ? ` — ${pdfProgress}%` : '…'}` : 'Download PDF'}
             </Button>
           </div>
         </CardContent>
