@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -11,41 +11,50 @@ const ReportView = () => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [csvText, setCsvText] = useState('');
+  const [reportApiData, setReportApiData] = useState(null);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [executionName, setExecutionName] = useState('');
+  const [activeFilters, setActiveFilters] = useState({});
+
+  const loadReportData = useCallback(async (filters = {}) => {
+    if (!executionId) {
+      setError('Missing execution id in URL.');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const [executionDetails, pageData] = await Promise.all([
+        executionService.getExecution(executionId),
+        reportService.getReportDataPage(executionId, {
+          page: 1,
+          pageSize: 1000,
+          ...filters,
+        }),
+      ]);
+
+      setExecutionName(executionDetails?.name || 'Unnamed Execution');
+      setReportApiData(pageData);
+    } catch (requestError) {
+      setReportApiData(null);
+      setExecutionName('');
+      setError(getApiErrorMessage(requestError, 'Unable to load report data.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [executionId]);
 
   useEffect(() => {
-    const loadReportData = async () => {
-      if (!executionId) {
-        setError('Missing execution id in URL.');
-        setLoading(false);
-        return;
-      }
+    void loadReportData(activeFilters);
+  }, [executionId, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-      setLoading(true);
-      setError('');
-      try {
-        // Fetch execution details and CSV in parallel
-        const [executionDetails, csvContent] = await Promise.all([
-          executionService.getExecution(executionId),
-          reportService.getReportCsv(executionId),
-        ]);
-        
-        setExecutionName(executionDetails?.name || 'Unnamed Execution');
-        setCsvText(typeof csvContent === 'string' ? csvContent : '');
-      } catch (requestError) {
-        setCsvText('');
-        setExecutionName('');
-        setError(getApiErrorMessage(requestError, 'Unable to load report data.'));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void loadReportData();
-  }, [executionId, reloadKey]);
+  const handleFilterChange = useCallback((filters) => {
+    setActiveFilters(filters);
+    void loadReportData(filters);
+  }, [loadReportData]);
 
   if (loading) {
     return (
@@ -83,7 +92,13 @@ const ReportView = () => {
     );
   }
 
-  return <StandardReportRenderer csvText={csvText} sourceLabel={`Analysis Report - ${executionName}`} />;
+  return (
+    <StandardReportRenderer
+      reportApiData={reportApiData}
+      onFilterChange={handleFilterChange}
+      sourceLabel={`Analysis Report - ${executionName}`}
+    />
+  );
 };
 
 export default ReportView;
