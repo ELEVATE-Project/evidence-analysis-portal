@@ -233,7 +233,7 @@ const computeReportDataAsync = async (rows, onProgress) => {
       const block = normalizeValue(row.Block) || 'Unknown';
       const school = normalizeValue(row['School Name']) || 'Unknown';
       const uuid = normalizeValue(row.UUID) || 'Unknown User';
-      const task = normalizeValue(row.Tasks) || 'Unknown Task';
+      const task = (normalizeValue(row.Tasks).replace(/^'/, '').normalize('NFC')) || 'Unknown Task';
       const state = normalizeValue(row['Declared State']);
       if (state) statesSet.add(state.toUpperCase());
       const stateName = state || 'Unknown State';
