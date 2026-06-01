@@ -7,7 +7,7 @@ React frontend for the Evidence Analysis System.
 ## Prerequisites
 
 - Node.js 20+ and npm 10+
-- Backend API running at `http://localhost:8000`
+- Backend API running at `http://localhost:6002`
 
 ---
 
@@ -35,7 +35,7 @@ All configuration is driven by `.env`. See `.env.example` for the full list.
 Minimum required:
 ```env
 APPLICATION_PORT=5173
-API_ENDPOINT=http://localhost:8000
+API_ENDPOINT=http://localhost:6002
 ```
 
 ---
