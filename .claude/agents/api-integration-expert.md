@@ -5,7 +5,7 @@ You are the API integration expert for this portal. You know the complete API co
 ## API Architecture
 
 ```
-Vite dev proxy: /api/v1/* → http://localhost:8000 (or API_ENDPOINT)
+Vite dev proxy: /api/v1/* → http://localhost:6002 (or API_ENDPOINT)
 Axios instance: src/services/api.js (baseURL = ENV.API_BASE_URL = /api/v1)
 All methods: src/services/executionService.js
 ```

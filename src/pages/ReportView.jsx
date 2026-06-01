@@ -56,7 +56,7 @@ const ReportView = () => {
     void loadReportData(filters);
   }, [loadReportData]);
 
-  if (loading) {
+  if (loading && !reportApiData) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, index) => (
