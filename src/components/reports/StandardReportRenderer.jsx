@@ -526,6 +526,9 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
   const usingApiData = !!reportApiData?.summary;
 
   const [filters, setFilters] = useState(emptyFilters);
+  // Ref keeps the latest filters value accessible in callbacks without stale closure
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
   const [expandedDistricts, setExpandedDistricts] = useState(new Set());
   const [expandedBlocks, setExpandedBlocks] = useState(new Set());
   const [topHierarchyCount, setTopHierarchyCount] = useState(5);
@@ -555,13 +558,11 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
 
   // Unified filter setter: updates local state and propagates to parent in API mode
   const handleFilterUpdate = useCallback((updater) => {
-    setFilters((previous) => {
-      const next = typeof updater === 'function' ? updater(previous) : updater;
-      if (usingApiData && onFilterChange) {
-        onFilterChange(next);
-      }
-      return next;
-    });
+    const next = typeof updater === 'function' ? updater(filtersRef.current) : updater;
+    setFilters(next);
+    if (usingApiData && onFilterChange) {
+      onFilterChange(next);
+    }
   }, [usingApiData, onFilterChange]);
 
   const parsed = useMemo(() => {
