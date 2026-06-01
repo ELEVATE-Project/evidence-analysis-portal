@@ -1,0 +1,86 @@
+---
+# Evidence Analysis Frontend - Deployment Playbook
+# React + Vite with PM2 Process Manager
+
+- hosts: elevate
+  vars:
+    project_path: /opt/frontend/deployment
+
+  tasks:
+    - name: Slurp hosts file
+      slurp:
+        src: "{{ project_path }}/.token"
+      register: slurpfile
+
+    - name: Get vault credentials
+      shell: "curl --location --request GET '{{ vaultAddress }}evidence-analysis-frontend' --header 'X-Vault-Token: {{ slurpfile['content'] | b64decode }}' | jq '.data' > '{{ project_path }}/data2.json'"
+      register: credentials
+
+    - debug: msg="{{ credentials }}"
+
+    - name: Set some variable
+      set_fact:
+        release_path: "{{ project_path }}/releases/{{ lookup('pipe','date +%Y%m%d%H%M%S') }}"
+        current_path: "{{ project_path }}/evidence-analysis-portal-p1"
+
+    - name: Retrieve current release folder
+      command: readlink -f evidence-analysis-portal-p1
+      register: current_release_path
+      ignore_errors: yes
+      args:
+        chdir: "{{ project_path }}"
+
+    - name: Create new folder
+      file:
+        dest={{ release_path }}
+        mode=0755
+        recurse=yes
+        state=directory
+
+    - name: Clone the repository
+      git:
+        repo: https://github.com/priyanka-TL/evidence-analysis-portal-p1.git
+        dest: "{{ release_path }}"
+        clone: yes
+        update: yes
+        version: "{{ gitBranch }}"
+
+    - name: Install npm dependencies
+      shell: cd {{ release_path }} && npm install
+
+    - name: Delete Old Folder
+      shell: rm -rf {{ current_path }} && cd {{ project_path }} && mkdir evidence-analysis-portal-p1
+
+    - name: Move code
+      shell: mv "{{ release_path }}"/* {{ current_path }}/
+
+    - name: set permission
+      shell: chmod 744 {{ current_path }}/package.json
+
+    - name: generate .env
+      shell: cat {{ project_path }}/data2.json | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > {{ current_path }}/.env
+      register: envConfig
+
+    - debug: msg=" cred {{ envConfig }} "
+
+    - name: Build production bundle
+      shell: cd {{ current_path }} && npm run build
+      register: buildResponse
+      ignore_errors: yes
+
+    - debug: msg=" Build {{ buildResponse }} "
+
+    - name: Delete old pm2 frontend process
+      command: pm2 delete evidence-frontend
+      ignore_errors: yes
+
+    - name: Delete release folder
+      shell: rm -rf {{ release_path }}
+
+    - name: Start frontend with pm2
+      command: "chdir={{ current_path }} pm2 start npm --name evidence-frontend -- run preview -- --host 0.0.0.0 --port 5173"
+      register: frontendPm2Info
+
+    - name: debug frontend info
+      debug:
+        msg: "Frontend Pm2 log {{ frontendPm2Info }}"
