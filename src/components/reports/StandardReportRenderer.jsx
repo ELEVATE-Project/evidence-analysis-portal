@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ENV } from '../../config/env';
 import PropTypes from 'prop-types';
 import Papa from 'papaparse';
 import {
@@ -719,6 +720,18 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
       blocks: trimBlocks(district.blocks),
     }));
   }, [reportData.topHierarchy, topHierarchyCount]);
+
+  // Mirrors the top-level state filter: when the user picks a state in the main filter bar,
+  // the hierarchy table narrows to districts that belong to that state only.
+  const hierarchyFilteredData = useMemo(() => {
+    if (!filters.state) return visibleTopHierarchy;
+    const stateKey = Object.keys(reportData.stateDistrictStats).find(
+      (s) => s.toLowerCase() === filters.state.toLowerCase()
+    );
+    if (!stateKey) return [];
+    const districtSet = new Set(Object.keys(reportData.stateDistrictStats[stateKey]));
+    return visibleTopHierarchy.filter((d) => districtSet.has(d.district));
+  }, [visibleTopHierarchy, filters.state, reportData.stateDistrictStats]);
 
   const timelineChartData = useMemo(() => ({
     labels: reportData.timelineLabels,
@@ -1816,6 +1829,9 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
           </CardContent>
         </Card>
 
+        {(!ENV.HIERARCHY_STATE_LOCK ||
+          (filters.state &&
+            filters.state.toLowerCase() === ENV.HIERARCHY_STATE_LOCK.toLowerCase())) && (
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1856,8 +1872,8 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {visibleTopHierarchy.length > 0 ? (
-                    visibleTopHierarchy.map((district, districtIndex) => {
+                  {hierarchyFilteredData.length > 0 ? (
+                    hierarchyFilteredData.map((district, districtIndex) => {
                       const districtKey = district.district;
                       const districtExpanded = expandedTopDistricts.has(districtKey);
 
@@ -1988,6 +2004,7 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
             </div>
           </CardContent>
         </Card>
+        )}
 
         {hasRequiredEnrollmentColumns && reportData.hasEnrollmentData && (
           <Card className="border-slate-200 shadow-sm">
