@@ -251,8 +251,7 @@ export const executionService = {
   createExecutionDraft: async ({
     name,
     csv_type_id,
-    state,
-    district,
+    states,
     program_name,
     ai_model_id,
     program_ref_id,
@@ -262,8 +261,7 @@ export const executionService = {
     const payload = {
       name,
       csv_type_id,
-      state,
-      district,
+      states,
       program_name,
       ai_model_id,
       program_ref_id,
@@ -360,8 +358,7 @@ export const executionService = {
   createExecution: async ({
     name,
     csv_type_id,
-    state,
-    district,
+    states,
     program_name,
     ai_model_id,
     program_ref_id,
@@ -372,8 +369,7 @@ export const executionService = {
     const initPayload = {
       name,
       csv_type_id,
-      state,
-      district,
+      states,
       program_name,
       ai_model_id,
       program_ref_id,
