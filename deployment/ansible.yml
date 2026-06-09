@@ -13,7 +13,7 @@
       register: slurpfile
 
     - name: Get vault credentials
-      shell: "curl --location --request GET '{{ vaultAddress }}evidence-analysis-frontend' --header 'X-Vault-Token: {{ slurpfile['content'] | b64decode }}' | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d['data']['data'])\" > '{{ project_path }}/frontend-data.json'"
+      shell: "curl --location --request GET '{{ vaultAddress }}evidence-analysis-frontend' --header 'X-Vault-Token: {{ slurpfile['content'] | b64decode }}' | jq '.data.data' > '{{ project_path }}/frontend-data.json'"
       register: credentials
 
     - name: Set paths
@@ -37,17 +37,7 @@
         version: "{{ gitBranch }}"
 
     - name: Generate .env
-      shell: >
-        cat {{ project_path }}/frontend-data.json |
-        python3 -c "
-        import sys, json
-        d = json.load(sys.stdin)
-        lines = []
-        for k, v in d.items():
-            v = str(v).replace('\n', '\\n')
-            lines.append(f'{k}={v}')
-        print('\n'.join(lines))
-        " > {{ release_path }}/.env
+      shell: cat {{ project_path }}/frontend-data.json | jq -r 'to_entries | .[] | "\(.key)=\(if (.value | type) == "string" then (.value | gsub("\n"; "\\n")) else (.value | tostring) end)"' > {{ release_path }}/.env
       register: envConfig
 
     - debug: msg="env config {{ envConfig }}"
