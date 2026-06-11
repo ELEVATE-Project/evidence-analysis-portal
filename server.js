@@ -2,11 +2,12 @@ import express from 'express'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { createProxyMiddleware } from 'http-proxy-middleware'
+import { config } from 'dotenv'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-process.loadEnvFile(path.join(__dirname, '.env'))
+config({ path: path.join(__dirname, '.env') })
 
 const app = express()
 const port = process.env.PORT || 4500
