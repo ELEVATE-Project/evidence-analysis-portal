@@ -49,6 +49,12 @@ export default defineConfig(({ mode }) => {
         [applicationBaseUrl]: {
           target: apiEndpoint,
           changeOrigin: true,
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              const targetOrigin = new URL(apiEndpoint).origin;
+              console.log(`[proxy] ${req.method} ${req.url} -> ${targetOrigin}${proxyReq.path}`);
+            });
+          },
         }
       }
     },
