@@ -55,7 +55,7 @@
       shell: rm -rf {{ current_path }} && mkdir -p {{ current_path }}
 
     - name: Move build output to serving folder
-      shell: mv "{{ release_path }}"/* {{ current_path }}/
+      shell: mv "{{ release_path }}"/.env {{ current_path }}/.env && mv "{{ release_path }}"/* {{ current_path }}/
 
     - name: Delete release folder
       file:
