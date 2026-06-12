@@ -48,7 +48,8 @@ const ReportView = () => {
   }, [executionId]);
 
   useEffect(() => {
-    void loadReportData(activeFilters);
+    setActiveFilters({});
+    void loadReportData({});
   }, [executionId, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFilterChange = useCallback((filters) => {
@@ -94,6 +95,7 @@ const ReportView = () => {
 
   return (
     <StandardReportRenderer
+      key={executionId}
       reportApiData={reportApiData}
       onFilterChange={handleFilterChange}
       sourceLabel={`Analysis Report - ${executionName}`}

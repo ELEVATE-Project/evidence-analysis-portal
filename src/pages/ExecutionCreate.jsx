@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { ENV } from '../config/env';
-import { entityService, executionService } from '../services/executionService';
+import { entityService, executionService, getApiErrorMessage } from '../services/executionService';
 import ExecutionWizardStepper from '../components/executions/ExecutionWizardStepper';
 
 const DEFAULT_CSV_TYPE_ID = ENV.DEFAULT_CSV_TYPE_ID;
@@ -65,7 +65,7 @@ const ExecutionCreate = () => {
       setStates(stateItems);
     } catch (error) {
       setStates([]);
-      setStateError(error?.message || 'Unable to load states. Please try again.');
+      setStateError(getApiErrorMessage(error, 'Unable to load states. Please try again.'));
     } finally {
       setStatesLoading(false);
     }
@@ -90,8 +90,7 @@ const ExecutionCreate = () => {
         selectedStateNames: Array.isArray(execution.states) ? execution.states : [],
       });
     } catch (error) {
-      const message = error?.response?.data?.detail || error?.message || 'Failed to load execution.';
-      setGlobalError(typeof message === 'string' ? message : 'Failed to load execution.');
+      setGlobalError(getApiErrorMessage(error, 'Failed to load execution.'));
     } finally {
       setLoadingExecution(false);
     }
@@ -155,8 +154,7 @@ const ExecutionCreate = () => {
         return id;
       }
     } catch (error) {
-      const message = error?.response?.data?.detail || error?.message || 'Failed to save analysis.';
-      setGlobalError(typeof message === 'string' ? message : 'Failed to save analysis.');
+      setGlobalError(getApiErrorMessage(error, 'Failed to save analysis.'));
       return null;
     } finally {
       setCreatingAnalysis(false);
