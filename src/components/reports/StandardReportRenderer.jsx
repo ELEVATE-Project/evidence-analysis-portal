@@ -17,7 +17,7 @@ import {
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { Download, Filter, BarChart3, Users, School, Building2, FileText, ChevronRight, ChevronDown } from 'lucide-react';
+import { Download, Filter, BarChart3, Users, School, Building2, FileText, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import DistrictRelevanceMap from './DistrictRelevanceMap';
@@ -519,7 +519,7 @@ const replaceMapSvgsForPdf = async (rootElement) => {
   };
 };
 
-const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterChange, sourceLabel = 'Report CSV' }) => {
+const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterChange, isFilterLoading = false, sourceLabel = 'Report CSV' }) => {
   const reportRef = useRef(null);
 
   // True when the parent provides pre-aggregated API data (large-dataset path)
@@ -1167,6 +1167,12 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
           <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
             <Filter className="h-4 w-4 text-blue-600" />
             Filter Report Data
+            {isFilterLoading && (
+              <span className="flex items-center gap-1.5 text-sm font-normal text-slate-500">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Updating...
+              </span>
+            )}
           </CardTitle>
           <CardDescription>Refine report insights by location and relevance criteria.</CardDescription>
         </CardHeader>
@@ -1177,7 +1183,8 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
               <select
                 value={filters.state}
                 onChange={(event) => handleFilterUpdate((previous) => ({ ...previous, state: event.target.value, district: '', block: '', school: '' }))}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                disabled={isFilterLoading}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="">All States</option>
                 {filterOptions.states.map((state) => (
@@ -1191,7 +1198,8 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
               <select
                 value={filters.district}
                 onChange={(event) => handleFilterUpdate((previous) => ({ ...previous, district: event.target.value, block: '', school: '' }))}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                disabled={isFilterLoading}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="">All Districts</option>
                 {filterOptions.districts.map((district) => (
@@ -1205,7 +1213,8 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
               <select
                 value={filters.block}
                 onChange={(event) => handleFilterUpdate((previous) => ({ ...previous, block: event.target.value, school: '' }))}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                disabled={isFilterLoading}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="">All Blocks</option>
                 {filterOptions.blocks.map((block) => (
@@ -1219,7 +1228,8 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
               <select
                 value={filters.school}
                 onChange={(event) => handleFilterUpdate((previous) => ({ ...previous, school: event.target.value }))}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                disabled={isFilterLoading}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="">All Schools</option>
                 {filterOptions.schools.map((school) => (
@@ -1233,7 +1243,8 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
               <select
                 value={filters.relevance}
                 onChange={(event) => handleFilterUpdate((previous) => ({ ...previous, relevance: event.target.value }))}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                disabled={isFilterLoading}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="">All Relevance</option>
                 {RELEVANCE_TYPES.map((tag) => (
@@ -1243,10 +1254,11 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
             </label>
           </div>
           <div className="mt-4 flex justify-end">
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => handleFilterUpdate(emptyFilters)}
+              disabled={isFilterLoading}
               className="h-10 border-slate-300 text-slate-700 hover:bg-slate-100"
             >
               Clear Filters
@@ -2173,6 +2185,7 @@ StandardReportRenderer.propTypes = {
   parsedRows: PropTypes.array,
   reportApiData: PropTypes.object,
   onFilterChange: PropTypes.func,
+  isFilterLoading: PropTypes.bool,
   sourceLabel: PropTypes.string,
 };
 

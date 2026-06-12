@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -13,49 +13,81 @@ const ReportView = () => {
   const [loading, setLoading] = useState(true);
   const [reportApiData, setReportApiData] = useState(null);
   const [error, setError] = useState('');
+  const [filterError, setFilterError] = useState('');
+  const [filterLoading, setFilterLoading] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [executionName, setExecutionName] = useState('');
-  const [activeFilters, setActiveFilters] = useState({});
 
-  const loadReportData = useCallback(async (filters = {}) => {
+  // Tracks the most recent request so out-of-order responses can be ignored
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
     if (!executionId) {
       setError('Missing execution id in URL.');
       setLoading(false);
       return;
     }
 
+    const requestId = ++requestIdRef.current;
+
     setLoading(true);
     setError('');
-    try {
-      const [executionDetails, pageData] = await Promise.all([
-        executionService.getExecution(executionId),
-        reportService.getReportDataPage(executionId, {
+    setFilterError('');
+
+    const loadInitialData = async () => {
+      try {
+        const [executionDetails, pageData] = await Promise.all([
+          executionService.getExecution(executionId),
+          reportService.getReportDataPage(executionId, { page: 1, pageSize: 1000 }),
+        ]);
+
+        if (requestId !== requestIdRef.current) return;
+        setExecutionName(executionDetails?.name || 'Unnamed Execution');
+        setReportApiData(pageData);
+      } catch (requestError) {
+        if (requestId !== requestIdRef.current) return;
+        setReportApiData(null);
+        setExecutionName('');
+        setError(getApiErrorMessage(requestError, 'Unable to load report data.'));
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadInitialData();
+  }, [executionId, reloadKey]);
+
+  const handleFilterChange = useCallback((filters) => {
+    if (!executionId) return;
+
+    const requestId = ++requestIdRef.current;
+    setFilterError('');
+    setFilterLoading(true);
+
+    const loadFilteredData = async () => {
+      try {
+        const pageData = await reportService.getReportDataPage(executionId, {
           page: 1,
           pageSize: 1000,
           ...filters,
-        }),
-      ]);
+        });
 
-      setExecutionName(executionDetails?.name || 'Unnamed Execution');
-      setReportApiData(pageData);
-    } catch (requestError) {
-      setReportApiData(null);
-      setExecutionName('');
-      setError(getApiErrorMessage(requestError, 'Unable to load report data.'));
-    } finally {
-      setLoading(false);
-    }
+        if (requestId !== requestIdRef.current) return;
+        setReportApiData(pageData);
+      } catch (requestError) {
+        if (requestId !== requestIdRef.current) return;
+        setFilterError(getApiErrorMessage(requestError, 'Unable to apply filters. Please try again.'));
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setFilterLoading(false);
+        }
+      }
+    };
+
+    void loadFilteredData();
   }, [executionId]);
-
-  useEffect(() => {
-    setActiveFilters({});
-    void loadReportData({});
-  }, [executionId, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleFilterChange = useCallback((filters) => {
-    setActiveFilters(filters);
-    void loadReportData(filters);
-  }, [loadReportData]);
 
   if (loading && !reportApiData) {
     return (
@@ -94,12 +126,21 @@ const ReportView = () => {
   }
 
   return (
-    <StandardReportRenderer
-      key={executionId}
-      reportApiData={reportApiData}
-      onFilterChange={handleFilterChange}
-      sourceLabel={`Analysis Report - ${executionName}`}
-    />
+    <div className="space-y-4">
+      {filterError && (
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          <AlertCircle className="h-4 w-4" />
+          <span>{filterError}</span>
+        </div>
+      )}
+      <StandardReportRenderer
+        key={executionId}
+        reportApiData={reportApiData}
+        onFilterChange={handleFilterChange}
+        isFilterLoading={filterLoading}
+        sourceLabel={`Analysis Report - ${executionName}`}
+      />
+    </div>
   );
 };
 
