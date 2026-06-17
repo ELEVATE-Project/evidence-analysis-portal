@@ -1,0 +1,75 @@
+---
+# Evidence Analysis Portal - Frontend Deployment Playbook
+# Vite React app — builds dist/, served via Express (server.js) under PM2
+
+- hosts: elevate
+  vars:
+    project_path: /opt/backend/deployment
+
+  tasks:
+    - name: Slurp vault token
+      slurp:
+        src: "{{ project_path }}/.token"
+      register: slurpfile
+
+    - name: Get vault credentials
+      shell: "curl --location --request GET '{{ vaultAddress }}evidence-analysis-frontend' --header 'X-Vault-Token: {{ slurpfile['content'] | b64decode }}' | jq '.data.data' > '{{ project_path }}/frontend-data.json'"
+      register: credentials
+
+    - name: Set paths
+      set_fact:
+        release_path: "{{ project_path }}/releases/portal-{{ lookup('pipe','date +%Y%m%d%H%M%S') }}"
+        current_path: "{{ project_path }}/evidence-portal"
+
+    - name: Create release folder
+      file:
+        dest: "{{ release_path }}"
+        mode: "0755"
+        recurse: yes
+        state: directory
+
+    - name: Clone the repository
+      git:
+        repo: https://github.com/ELEVATE-Project/evidence-analysis-portal.git
+        dest: "{{ release_path }}"
+        clone: yes
+        update: yes
+        version: "{{ gitBranch }}"
+
+    - name: Generate .env
+      shell: cat {{ project_path }}/frontend-data.json | jq -r 'to_entries | .[] | "\(.key)=\(if (.value | type) == "string" then (.value | gsub("\n"; "\\n")) else (.value | tostring) end)"' > {{ release_path }}/.env
+      register: envConfig
+
+    - debug: msg="env config {{ envConfig }}"
+
+    - name: Install Node dependencies
+      shell: cd {{ release_path }} && npm install --legacy-peer-deps
+
+    - name: Build frontend
+      shell: cd {{ release_path }} && npm run build
+      register: buildOutput
+
+    - debug: msg="Build output {{ buildOutput }}"
+
+    - name: Delete old portal folder
+      shell: rm -rf {{ current_path }} && mkdir -p {{ current_path }}
+
+    - name: Move build output to serving folder
+      shell: mv "{{ release_path }}"/.env {{ current_path }}/.env && mv "{{ release_path }}"/* {{ current_path }}/
+
+    - name: Delete release folder
+      file:
+        path: "{{ release_path }}"
+        state: absent
+
+    - name: Delete old pm2 frontend process
+      command: pm2 delete evidence-frontend
+      ignore_errors: yes
+
+    - name: Start frontend with pm2
+      command: "pm2 start {{ current_path }}/server.js --name evidence-frontend"
+      register: frontendPm2Info
+
+    - name: debug frontend info
+      debug:
+        msg: "Frontend Pm2 log {{ frontendPm2Info }}"

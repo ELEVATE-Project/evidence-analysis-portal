@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -11,43 +11,85 @@ const ReportView = () => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [csvText, setCsvText] = useState('');
+  const [reportApiData, setReportApiData] = useState(null);
   const [error, setError] = useState('');
+  const [filterError, setFilterError] = useState('');
+  const [filterLoading, setFilterLoading] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [executionName, setExecutionName] = useState('');
 
-  useEffect(() => {
-    const loadReportData = async () => {
-      if (!executionId) {
-        setError('Missing execution id in URL.');
-        setLoading(false);
-        return;
-      }
+  // Tracks the most recent request so out-of-order responses can be ignored
+  const requestIdRef = useRef(0);
 
-      setLoading(true);
-      setError('');
+  useEffect(() => {
+    if (!executionId) {
+      setError('Missing execution id in URL.');
+      setLoading(false);
+      return;
+    }
+
+    const requestId = ++requestIdRef.current;
+
+    setLoading(true);
+    setError('');
+    setFilterError('');
+
+    const loadInitialData = async () => {
       try {
-        // Fetch execution details and CSV in parallel
-        const [executionDetails, csvContent] = await Promise.all([
+        const [executionDetails, pageData] = await Promise.all([
           executionService.getExecution(executionId),
-          reportService.getReportCsv(executionId),
+          reportService.getReportDataPage(executionId, { page: 1, pageSize: 1000 }),
         ]);
-        
+
+        if (requestId !== requestIdRef.current) return;
         setExecutionName(executionDetails?.name || 'Unnamed Execution');
-        setCsvText(typeof csvContent === 'string' ? csvContent : '');
+        setReportApiData(pageData);
       } catch (requestError) {
-        setCsvText('');
+        if (requestId !== requestIdRef.current) return;
+        setReportApiData(null);
         setExecutionName('');
         setError(getApiErrorMessage(requestError, 'Unable to load report data.'));
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+        }
       }
     };
 
-    void loadReportData();
+    void loadInitialData();
   }, [executionId, reloadKey]);
 
-  if (loading) {
+  const handleFilterChange = useCallback((filters) => {
+    if (!executionId) return;
+
+    const requestId = ++requestIdRef.current;
+    setFilterError('');
+    setFilterLoading(true);
+
+    const loadFilteredData = async () => {
+      try {
+        const pageData = await reportService.getReportDataPage(executionId, {
+          page: 1,
+          pageSize: 1000,
+          ...filters,
+        });
+
+        if (requestId !== requestIdRef.current) return;
+        setReportApiData(pageData);
+      } catch (requestError) {
+        if (requestId !== requestIdRef.current) return;
+        setFilterError(getApiErrorMessage(requestError, 'Unable to apply filters. Please try again.'));
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setFilterLoading(false);
+        }
+      }
+    };
+
+    void loadFilteredData();
+  }, [executionId]);
+
+  if (loading && !reportApiData) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, index) => (
@@ -83,7 +125,23 @@ const ReportView = () => {
     );
   }
 
-  return <StandardReportRenderer csvText={csvText} sourceLabel={`Analysis Report - ${executionName}`} />;
+  return (
+    <div className="space-y-4">
+      {filterError && (
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          <AlertCircle className="h-4 w-4" />
+          <span>{filterError}</span>
+        </div>
+      )}
+      <StandardReportRenderer
+        key={executionId}
+        reportApiData={reportApiData}
+        onFilterChange={handleFilterChange}
+        isFilterLoading={filterLoading}
+        sourceLabel={`Analysis Report - ${executionName}`}
+      />
+    </div>
+  );
 };
 
 export default ReportView;
