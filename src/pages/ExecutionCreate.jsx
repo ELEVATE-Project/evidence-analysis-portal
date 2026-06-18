@@ -144,8 +144,10 @@ const ExecutionCreate = () => {
 
     setCreatingAnalysis(true);
     try {
+      // Number() here matches the parser used in validateCreateForm — parseInt() would
+      // silently disagree on inputs like "2e1" (parseInt -> 2, Number -> 20).
       const thresholdValue = formValues.evidenceThreshold !== ''
-        ? parseInt(formValues.evidenceThreshold, 10)
+        ? Number(formValues.evidenceThreshold)
         : undefined;
 
       if (isEditMode && executionId) {
