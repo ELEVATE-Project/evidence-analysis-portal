@@ -199,7 +199,7 @@ const updateNode = (node, relevanceTag) => {
 const computeReportDataAsync = async (rows, onProgress) => {
   const CHUNK = 5_000;
 
-  const relevanceCounts = { Relevant: 0, 'Partially Relevant': 0, Irrelevant: 0 };
+  const relevanceCounts = { Relevant: 0, 'Partially Relevant': 0, Irrelevant: 0, notValidated: 0 };
   const statesSet = new Set();
   const usersSet = new Set();
   const schoolsSet = new Set();
@@ -240,7 +240,11 @@ const computeReportDataAsync = async (rows, onProgress) => {
       if (state) statesSet.add(state.toUpperCase());
       const stateName = state || 'Unknown State';
 
-      if (RELEVANCE_TYPES.includes(relevanceTag)) relevanceCounts[relevanceTag] += 1;
+      if (RELEVANCE_TYPES.includes(relevanceTag)) {
+        relevanceCounts[relevanceTag] += 1;
+      } else if (relevanceTag === 'notValidated') {
+        relevanceCounts.notValidated += 1;
+      }
       if (uuid) usersSet.add(uuid);
       if (school) schoolsSet.add(school);
       if (district) districtsSet.add(district);
@@ -405,7 +409,7 @@ const computeReportDataAsync = async (rows, onProgress) => {
 // Safe empty shape matching computeReportData's return; used while async computation is pending.
 const EMPTY_REPORT_DATA = {
   totalEvidence: 0,
-  relevanceCounts: { Relevant: 0, 'Partially Relevant': 0, Irrelevant: 0 },
+  relevanceCounts: { Relevant: 0, 'Partially Relevant': 0, Irrelevant: 0, notValidated: 0 },
   usersCount: 0,
   schoolsCount: 0,
   districtsCount: 0,
@@ -1250,6 +1254,7 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
                 {RELEVANCE_TYPES.map((tag) => (
                   <option key={tag} value={tag}>{tag}</option>
                 ))}
+                <option value="notValidated">Not Validated</option>
               </select>
             </label>
           </div>
@@ -1291,6 +1296,9 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
                   <p className="text-lg font-semibold text-emerald-700">{formatNumber(reportData.relevanceCounts.Relevant)} Relevant</p>
                   <p className="text-sm text-amber-700">{formatNumber(reportData.relevanceCounts['Partially Relevant'])} Partially</p>
                   <p className="text-sm text-rose-700">{formatNumber(reportData.relevanceCounts.Irrelevant)} Irrelevant</p>
+                  {(reportData.relevanceCounts.notValidated || 0) > 0 && (
+                    <p className="text-sm text-slate-500">{formatNumber(reportData.relevanceCounts.notValidated)} Not Validated</p>
+                  )}
                 </div>
               </div>
             </CardContent>

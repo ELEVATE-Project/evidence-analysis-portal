@@ -31,6 +31,7 @@ const ExecutionCreate = () => {
   const [formValues, setFormValues] = useState({
     name: '',
     selectedStateNames: [],
+    evidenceThreshold: '',
   });
 
   useEffect(() => {
@@ -44,7 +45,7 @@ const ExecutionCreate = () => {
     }
     setIsEditMode(false);
     setExecutionId('');
-    setFormValues({ name: '', selectedStateNames: [] });
+    setFormValues({ name: '', selectedStateNames: [], evidenceThreshold: '' });
   }, [executionIdFromUrl]);
 
   useEffect(() => {
@@ -88,6 +89,9 @@ const ExecutionCreate = () => {
       setFormValues({
         name: execution.name || '',
         selectedStateNames: Array.isArray(execution.states) ? execution.states : [],
+        evidenceThreshold: execution.threshold_config?.enable_relevant_cap === true
+          ? String(execution.threshold_config.max_relevant_per_user_task ?? '')
+          : '',
       });
     } catch (error) {
       setGlobalError(getApiErrorMessage(error, 'Failed to load execution.'));
@@ -123,6 +127,13 @@ const ExecutionCreate = () => {
       setGlobalError('Please select at least one state.');
       return false;
     }
+    if (formValues.evidenceThreshold !== '') {
+      const n = Number(formValues.evidenceThreshold);
+      if (!Number.isInteger(n) || n < 1 || n > 100) {
+        setGlobalError('Evidence threshold must be a whole number between 1 and 100.');
+        return false;
+      }
+    }
     return true;
   };
 
@@ -133,12 +144,20 @@ const ExecutionCreate = () => {
 
     setCreatingAnalysis(true);
     try {
+      const thresholdValue = formValues.evidenceThreshold !== ''
+        ? parseInt(formValues.evidenceThreshold, 10)
+        : undefined;
+
       if (isEditMode && executionId) {
         // Update existing draft
-        const response = await executionService.updateExecution(executionId, {
+        const updatePayload = {
           name: formValues.name.trim(),
           states: formValues.selectedStateNames,
-        });
+        };
+        if (thresholdValue !== undefined) {
+          updatePayload.evidence_threshold = thresholdValue;
+        }
+        const response = await executionService.updateExecution(executionId, updatePayload);
         setGlobalSuccess('Analysis updated successfully.');
         return response?.id || executionId;
       } else {
@@ -147,6 +166,7 @@ const ExecutionCreate = () => {
           name: formValues.name.trim(),
           csv_type_id: DEFAULT_CSV_TYPE_ID,
           states: formValues.selectedStateNames,
+          ...(thresholdValue !== undefined ? { evidence_threshold: thresholdValue } : {}),
         });
         const id = response?.id || '';
         setExecutionId(id);
@@ -294,6 +314,27 @@ const ExecutionCreate = () => {
                       {stateError}
                     </p>
                   )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="evidenceThreshold" className="text-sm font-semibold text-slate-800">
+                    Evidence Threshold{' '}
+                    <span className="font-normal text-slate-500">(optional)</span>
+                  </Label>
+                  <Input
+                    id="evidenceThreshold"
+                    name="evidenceThreshold"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={formValues.evidenceThreshold}
+                    onChange={handleTextChange}
+                    placeholder="e.g. 3"
+                    className="border-slate-300 bg-white text-slate-800 hover:border-blue-400 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Maximum relevant evidences to evaluate per student per task. Leave blank to evaluate all rows.
+                  </p>
                 </div>
               </div>
 
