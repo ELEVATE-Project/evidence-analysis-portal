@@ -149,14 +149,14 @@ const ExecutionCreate = () => {
         : undefined;
 
       if (isEditMode && executionId) {
-        // Update existing draft
+        // Update existing draft. evidence_threshold is always included (as a number or
+        // null) so clearing the field explicitly removes a previously-set threshold —
+        // PATCH semantics mean an omitted key would otherwise leave the old value intact.
         const updatePayload = {
           name: formValues.name.trim(),
           states: formValues.selectedStateNames,
+          evidence_threshold: thresholdValue !== undefined ? thresholdValue : null,
         };
-        if (thresholdValue !== undefined) {
-          updatePayload.evidence_threshold = thresholdValue;
-        }
         const response = await executionService.updateExecution(executionId, updatePayload);
         setGlobalSuccess('Analysis updated successfully.');
         return response?.id || executionId;
