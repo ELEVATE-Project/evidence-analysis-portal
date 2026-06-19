@@ -4,7 +4,7 @@ import { Download, FileSearch, FileText, Loader2, Pencil, RefreshCw, RotateCcw }
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { executionService, getApiErrorMessage, reportService } from '../services/executionService';
-import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
+import { formatDateTime, formatEvidenceTypes, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
 
 const PREVIEW_LIMIT = 10;
 
@@ -179,7 +179,7 @@ const ExecutionDetail = () => {
     () => [
       { label: 'State', value: execution?.states?.join(', ') || null },
       { label: 'Program', value: execution?.program_name },
-      { label: 'Evidence Types', value: execution?.processing_config?.evidence_types?.join(', ') || 'All types' },
+      { label: 'Evidence Types', value: formatEvidenceTypes(execution?.processing_config?.evidence_types) || 'All types' },
       { label: 'Created On', value: formatDateTime(execution?.created_at) },
       { label: 'Last Updated', value: formatDateTime(execution?.updated_at) },
     ],

@@ -63,6 +63,20 @@ export const getAnalysisStatusMeta = (status) => {
   };
 };
 
+export const EVIDENCE_TYPE_LABELS = {
+  image: 'Image',
+  pdf: 'PDF',
+  excel: 'Excel',
+};
+
+export const formatEvidenceTypes = (evidenceTypes) => {
+  if (!Array.isArray(evidenceTypes) || evidenceTypes.length === 0) {
+    return '';
+  }
+
+  return evidenceTypes.map((key) => EVIDENCE_TYPE_LABELS[key] || key).join(', ');
+};
+
 export const formatDateTime = (value) => {
   if (!value) {
     return '-';

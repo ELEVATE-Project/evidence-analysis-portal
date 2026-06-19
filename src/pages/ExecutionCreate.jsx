@@ -7,15 +7,12 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { ENV } from '../config/env';
 import { entityService, executionService, getApiErrorMessage } from '../services/executionService';
+import { EVIDENCE_TYPE_LABELS } from '../lib/analysis';
 import ExecutionWizardStepper from '../components/executions/ExecutionWizardStepper';
 
 const DEFAULT_CSV_TYPE_ID = ENV.DEFAULT_CSV_TYPE_ID;
 
-const EVIDENCE_TYPES = [
-  { key: 'image', label: 'Image' },
-  { key: 'pdf', label: 'PDF' },
-  { key: 'excel', label: 'Excel' },
-];
+const EVIDENCE_TYPES = Object.entries(EVIDENCE_TYPE_LABELS).map(([key, label]) => ({ key, label }));
 const ALL_EVIDENCE_TYPE_KEYS = EVIDENCE_TYPES.map((evidenceType) => evidenceType.key);
 
 const ExecutionCreate = () => {
