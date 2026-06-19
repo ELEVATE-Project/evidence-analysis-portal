@@ -11,6 +11,13 @@ import ExecutionWizardStepper from '../components/executions/ExecutionWizardStep
 
 const DEFAULT_CSV_TYPE_ID = ENV.DEFAULT_CSV_TYPE_ID;
 
+const EVIDENCE_TYPES = [
+  { key: 'image', label: 'Image' },
+  { key: 'pdf', label: 'PDF' },
+  { key: 'excel', label: 'Excel' },
+];
+const ALL_EVIDENCE_TYPE_KEYS = EVIDENCE_TYPES.map((evidenceType) => evidenceType.key);
+
 const ExecutionCreate = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -31,6 +38,7 @@ const ExecutionCreate = () => {
   const [formValues, setFormValues] = useState({
     name: '',
     selectedStateNames: [],
+    selectedEvidenceTypes: ALL_EVIDENCE_TYPE_KEYS,
   });
 
   useEffect(() => {
@@ -44,7 +52,7 @@ const ExecutionCreate = () => {
     }
     setIsEditMode(false);
     setExecutionId('');
-    setFormValues({ name: '', selectedStateNames: [] });
+    setFormValues({ name: '', selectedStateNames: [], selectedEvidenceTypes: ALL_EVIDENCE_TYPE_KEYS });
   }, [executionIdFromUrl]);
 
   useEffect(() => {
@@ -88,6 +96,7 @@ const ExecutionCreate = () => {
       setFormValues({
         name: execution.name || '',
         selectedStateNames: Array.isArray(execution.states) ? execution.states : [],
+        selectedEvidenceTypes: execution.processing_config?.evidence_types || ALL_EVIDENCE_TYPE_KEYS,
       });
     } catch (error) {
       setGlobalError(getApiErrorMessage(error, 'Failed to load execution.'));
@@ -114,6 +123,17 @@ const ExecutionCreate = () => {
     });
   };
 
+  const handleEvidenceTypeToggle = (evidenceTypeKey) => {
+    setGlobalError('');
+    setGlobalSuccess('');
+    setFormValues((current) => {
+      const next = current.selectedEvidenceTypes.includes(evidenceTypeKey)
+        ? current.selectedEvidenceTypes.filter((key) => key !== evidenceTypeKey)
+        : [...current.selectedEvidenceTypes, evidenceTypeKey];
+      return { ...current, selectedEvidenceTypes: next };
+    });
+  };
+
   const validateCreateForm = () => {
     if (!formValues.name.trim()) {
       setGlobalError('Analysis name is required.');
@@ -121,6 +141,10 @@ const ExecutionCreate = () => {
     }
     if (formValues.selectedStateNames.length === 0) {
       setGlobalError('Please select at least one state.');
+      return false;
+    }
+    if (formValues.selectedEvidenceTypes.length === 0) {
+      setGlobalError('Please select at least one evidence type.');
       return false;
     }
     return true;
@@ -134,19 +158,26 @@ const ExecutionCreate = () => {
     setCreatingAnalysis(true);
     try {
       if (isEditMode && executionId) {
-        // Update existing draft
+        // Update existing draft — always send evidence_types so an update can
+        // clear a prior restriction by re-checking all three.
         const response = await executionService.updateExecution(executionId, {
           name: formValues.name.trim(),
           states: formValues.selectedStateNames,
+          evidence_types: formValues.selectedEvidenceTypes,
         });
         setGlobalSuccess('Analysis updated successfully.');
         return response?.id || executionId;
       } else {
-        // Create new draft
+        // Create new draft — omit evidence_types when unrestricted (all three checked)
+        const evidenceTypes =
+          formValues.selectedEvidenceTypes.length < ALL_EVIDENCE_TYPE_KEYS.length
+            ? formValues.selectedEvidenceTypes
+            : undefined;
         const response = await executionService.createExecutionDraft({
           name: formValues.name.trim(),
           csv_type_id: DEFAULT_CSV_TYPE_ID,
           states: formValues.selectedStateNames,
+          evidence_types: evidenceTypes,
         });
         const id = response?.id || '';
         setExecutionId(id);
@@ -294,6 +325,29 @@ const ExecutionCreate = () => {
                       {stateError}
                     </p>
                   )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-slate-800">Evidence Types</Label>
+                  <div className="flex flex-wrap gap-4">
+                    {EVIDENCE_TYPES.map((evidenceType) => (
+                      <label
+                        key={evidenceType.key}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formValues.selectedEvidenceTypes.includes(evidenceType.key)}
+                          onChange={() => handleEvidenceTypeToggle(evidenceType.key)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                        />
+                        <span className="text-sm text-slate-700">{evidenceType.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Leave all checked to validate every evidence type. Uncheck to restrict analysis to specific types.
+                  </p>
                 </div>
               </div>
 

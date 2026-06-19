@@ -257,6 +257,7 @@ export const executionService = {
     program_ref_id,
     criterias_mode,
     threshold_config,
+    evidence_types,
   }) => {
     const payload = {
       name,
@@ -267,6 +268,7 @@ export const executionService = {
       program_ref_id,
       criterias_mode,
       threshold_config,
+      evidence_types,
     };
     const response = await apiClient.post('/executions/', payload);
     return response.data;
