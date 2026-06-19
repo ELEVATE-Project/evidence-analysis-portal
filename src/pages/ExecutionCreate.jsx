@@ -335,7 +335,7 @@ const ExecutionCreate = () => {
                     className="border-slate-300 bg-white text-slate-800 hover:border-blue-400 focus:border-blue-500"
                   />
                   <p className="text-xs text-slate-500">
-                    Maximum relevant evidences to evaluate per student per task. Leave blank to evaluate all rows.
+                    Maximum relevant evidences to evaluate per user per task. Leave blank to evaluate all rows.
                   </p>
                 </div>
               </div>
