@@ -240,9 +240,7 @@ const computeReportDataAsync = async (rows, onProgress) => {
       if (state) statesSet.add(state.toUpperCase());
       const stateName = state || 'Unknown State';
 
-      if (RELEVANCE_TYPES.includes(relevanceTag)) {
-        relevanceCounts[relevanceTag] += 1;
-      }
+      if (RELEVANCE_TYPES.includes(relevanceTag)) relevanceCounts[relevanceTag] += 1;
       if (uuid) usersSet.add(uuid);
       if (school) schoolsSet.add(school);
       if (district) districtsSet.add(district);

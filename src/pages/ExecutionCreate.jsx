@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowRight, ChevronDown, FileText, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, ChevronDown, FileText, Info, RefreshCw, X } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -319,10 +319,27 @@ const ExecutionCreate = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="evidenceThreshold" className="text-sm font-semibold text-slate-800">
-                    Evidence Threshold{' '}
-                    <span className="font-normal text-slate-500">(optional)</span>
-                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="evidenceThreshold" className="text-sm font-semibold text-slate-800">
+                      Maximum Valid Evidences{' '}
+                      <span className="font-normal text-slate-500">(optional)</span>
+                    </Label>
+                    <span className="group relative inline-flex">
+                      <button
+                        type="button"
+                        aria-label="What is Maximum Valid Evidences?"
+                        className="rounded-full text-slate-400 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                      <span
+                        role="tooltip"
+                        className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-64 -translate-x-1/2 rounded-md bg-slate-800 px-3 py-2 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                      >
+                        Once this number of valid evidences is reached for a task, no further evidences will be checked for that user. Leave blank to evaluate all rows.
+                      </span>
+                    </span>
+                  </div>
                   <Input
                     id="evidenceThreshold"
                     name="evidenceThreshold"
@@ -334,9 +351,6 @@ const ExecutionCreate = () => {
                     placeholder="e.g. 3"
                     className="border-slate-300 bg-white text-slate-800 hover:border-blue-400 focus:border-blue-500"
                   />
-                  <p className="text-xs text-slate-500">
-                    Maximum relevant evidences to evaluate per user per task. Leave blank to evaluate all rows.
-                  </p>
                 </div>
               </div>
 
