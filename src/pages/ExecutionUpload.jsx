@@ -64,7 +64,7 @@ const ExecutionUpload = () => {
     existingUploaded: false,
   });
 
-  const hasAnyFileSelected = Boolean(inputFileState.file) || Boolean(questionsFileState.file);
+  const hasAnyFileSelected = Boolean(inputFileState.file) || Boolean(questionsFileState.file) || Boolean(schoolFilterState.file);
   const hasInputAvailable = Boolean(inputFileState.file) || inputFileState.existingUploaded;
   const hasQuestionsAvailable = Boolean(questionsFileState.file) || questionsFileState.existingUploaded;
   const hasExistingFiles = inputFileState.existingUploaded && questionsFileState.existingUploaded;
@@ -142,7 +142,7 @@ const ExecutionUpload = () => {
         setCsvTypeId(execution?.csv_type_id || null);
         hydrateExistingFiles(execution);
 
-        if (!['draft', 'validated'].includes(normalizedStatus)) {
+        if (!['draft', 'validated', 'queued'].includes(normalizedStatus)) {
           setGlobalError('Only draft or validated executions can be updated.');
         }
       } catch (error) {
@@ -653,7 +653,7 @@ const ExecutionUpload = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold text-slate-800">School Filter CSV</span>
+                      <Label htmlFor="schoolFilterFile" className="text-sm font-semibold text-slate-800">School Filter CSV</Label>
                       <span className="inline-flex items-center rounded-full border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-500">
                         Optional
                       </span>
