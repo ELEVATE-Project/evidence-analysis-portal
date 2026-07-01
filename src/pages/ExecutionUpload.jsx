@@ -143,7 +143,7 @@ const ExecutionUpload = () => {
         hydrateExistingFiles(execution);
 
         if (!['draft', 'validated', 'queued'].includes(normalizedStatus)) {
-          setGlobalError('Only draft or validated executions can be updated.');
+          setGlobalError('Only draft, validated, or queued executions can be updated.');
         }
       } catch (error) {
         const message = error?.response?.data?.detail || error?.message || 'Failed to load execution details.';
@@ -186,6 +186,7 @@ const ExecutionUpload = () => {
       const result = await executionService.uploadSchoolFilterFile(executionId, schoolFilterState.file);
       setSchoolFilterState((current) => ({
         ...current,
+        file: null,
         uploading: false,
         rowsDetected: result?.rows_detected ?? null,
         existingFileName: current.file?.name || current.existingFileName,
@@ -350,7 +351,7 @@ const ExecutionUpload = () => {
     }
 
     if (!isEditableExecution) {
-      setGlobalError('Only draft or validated executions can be updated.');
+      setGlobalError('Only draft, validated, or queued executions can be updated.');
       return;
     }
 
