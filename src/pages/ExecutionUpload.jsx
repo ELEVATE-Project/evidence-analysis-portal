@@ -402,6 +402,12 @@ const ExecutionUpload = () => {
               error: uploadMessage,
             }));
           }
+          if (schoolFilterState.file) {
+            setSchoolFilterState((current) => ({
+              ...current,
+              error: uploadMessage,
+            }));
+          }
 
           setGlobalSuccess('');
           setGlobalError(`Upload failed: ${uploadMessage}`);
