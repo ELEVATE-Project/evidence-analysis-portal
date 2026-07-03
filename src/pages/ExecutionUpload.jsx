@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, CheckCircle2, Download, FileText, RefreshCw, UploadCloud, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Download, FileText, Filter, RefreshCw, UploadCloud, XCircle } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -22,13 +22,25 @@ const initialFileState = {
   existingValidated: false,
 };
 
+const formatFileSize = (bytes) => {
+  if (typeof bytes !== 'number' || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 const extractDisplayFileName = (filePath, fileType) => {
   if (typeof filePath !== 'string' || !filePath.trim()) {
     return '';
   }
 
   const rawName = filePath.split('/').pop() || '';
-  const decodedName = decodeURIComponent(rawName);
+  let decodedName = rawName;
+  try {
+    decodedName = decodeURIComponent(rawName);
+  } catch {
+    // Malformed % sequence in the stored filename; fall back to the raw name.
+  }
   const prefix = `${fileType}_`;
   return decodedName.startsWith(prefix) ? decodedName.slice(prefix.length) : decodedName;
 };
@@ -44,21 +56,30 @@ const ExecutionUpload = () => {
   const [submitting, setSubmitting] = useState(false);
   const [executionStatus, setExecutionStatus] = useState('');
   const [csvTypeId, setCsvTypeId] = useState(null);
-  const [downloadingSample, setDownloadingSample] = useState({ input: false, criteria: false });
+  const [downloadingSample, setDownloadingSample] = useState({ input: false, criteria: false, school_filter: false });
   const [inputFileState, setInputFileState] = useState(initialFileState);
   const [questionsFileState, setQuestionsFileState] = useState(initialFileState);
+  const [schoolFilterState, setSchoolFilterState] = useState({
+    file: null,
+    uploading: false,
+    rowsDetected: null,
+    error: '',
+    existingFileName: '',
+    existingFileSize: null,
+    existingUploaded: false,
+  });
 
-  const hasAnyFileSelected = Boolean(inputFileState.file) || Boolean(questionsFileState.file);
+  const hasAnyFileSelected = Boolean(inputFileState.file) || Boolean(questionsFileState.file) || Boolean(schoolFilterState.file);
   const hasInputAvailable = Boolean(inputFileState.file) || inputFileState.existingUploaded;
   const hasQuestionsAvailable = Boolean(questionsFileState.file) || questionsFileState.existingUploaded;
   const hasExistingFiles = inputFileState.existingUploaded && questionsFileState.existingUploaded;
-  const isUploadingAny = inputFileState.uploading || questionsFileState.uploading || submitting;
+  const isUploadingAny = inputFileState.uploading || questionsFileState.uploading || submitting || schoolFilterState.uploading;
   const isEditableExecution = useMemo(() => {
     const normalizedStatus = `${executionStatus || ''}`.toLowerCase();
     if (!normalizedStatus) {
       return true;
     }
-    return normalizedStatus === 'draft' || normalizedStatus === 'validated';
+    return normalizedStatus === 'draft' || normalizedStatus === 'validated' || normalizedStatus === 'queued';
   }, [executionStatus]);
 
   const actionLabel = useMemo(() => {
@@ -101,6 +122,14 @@ const ExecutionUpload = () => {
       message: typeof questionsStatus.message === 'string' ? questionsStatus.message : '',
       error: '',
     }));
+
+    setSchoolFilterState((current) => ({
+      ...current,
+      existingFileName: extractDisplayFileName(execution?.school_filter_file_url, 'school_filter'),
+      existingFileSize: typeof execution?.school_filter_file_size === 'number' ? execution.school_filter_file_size : null,
+      existingUploaded: Boolean(execution?.school_filter_file_url),
+      error: '',
+    }));
   };
 
   useEffect(() => {
@@ -118,8 +147,8 @@ const ExecutionUpload = () => {
         setCsvTypeId(execution?.csv_type_id || null);
         hydrateExistingFiles(execution);
 
-        if (!['draft', 'validated'].includes(normalizedStatus)) {
-          setGlobalError('Only draft or validated executions can be updated.');
+        if (!['draft', 'validated', 'queued'].includes(normalizedStatus)) {
+          setGlobalError('Only draft, validated, or queued executions can be updated.');
         }
       } catch (error) {
         const message = error?.response?.data?.detail || error?.message || 'Failed to load execution details.';
@@ -148,6 +177,35 @@ const ExecutionUpload = () => {
     }));
     setGlobalError('');
     setGlobalSuccess('');
+  };
+
+  const handleSchoolFilterFileSelect = (event) => {
+    const selectedFile = event.target.files?.[0] || null;
+    setSchoolFilterState((current) => ({ ...current, file: selectedFile, error: '' }));
+  };
+
+  const handleSchoolFilterUpload = async () => {
+    if (!schoolFilterState.file || !executionId) return;
+    setSchoolFilterState((current) => ({ ...current, uploading: true, error: '' }));
+    try {
+      const result = await executionService.uploadSchoolFilterFile(executionId, schoolFilterState.file);
+      setSchoolFilterState((current) => ({
+        ...current,
+        file: null,
+        uploading: false,
+        rowsDetected: result?.rows_detected ?? null,
+        existingFileName: current.file?.name || current.existingFileName,
+        existingFileSize: typeof current.file?.size === 'number' ? current.file.size : current.existingFileSize,
+        existingUploaded: true,
+        error: '',
+      }));
+    } catch (err) {
+      setSchoolFilterState((current) => ({
+        ...current,
+        uploading: false,
+        error: getApiErrorMessage(err, 'Failed to upload school filter file.'),
+      }));
+    }
   };
 
   const handleDownloadSample = async (fileType) => {
@@ -181,6 +239,7 @@ const ExecutionUpload = () => {
   const uploadSelectedFiles = async () => {
     const selectedInputFile = inputFileState.file;
     const selectedQuestionsFile = questionsFileState.file;
+    const selectedSchoolFilterFile = schoolFilterState.file;
 
     if (selectedInputFile) {
       setInputFileState((current) => ({ ...current, uploading: true, error: '' }));
@@ -188,6 +247,35 @@ const ExecutionUpload = () => {
     if (selectedQuestionsFile) {
       setQuestionsFileState((current) => ({ ...current, uploading: true, error: '' }));
     }
+    if (selectedSchoolFilterFile) {
+      setSchoolFilterState((current) => ({ ...current, uploading: true, error: '' }));
+    }
+
+    // School filter is optional: upload it independently so a failure here
+    // never aborts the required input/questions upload+validation flow.
+    const schoolFilterUploadPromise = selectedSchoolFilterFile
+      ? executionService
+          .uploadSchoolFilterFile(executionId, selectedSchoolFilterFile)
+          .then((result) => {
+            setSchoolFilterState((current) => ({
+              ...current,
+              uploading: false,
+              rowsDetected: result?.rows_detected ?? null,
+              existingFileName: selectedSchoolFilterFile.name || current.existingFileName,
+              existingFileSize:
+                typeof selectedSchoolFilterFile.size === 'number' ? selectedSchoolFilterFile.size : current.existingFileSize,
+              existingUploaded: true,
+              error: '',
+            }));
+          })
+          .catch((err) => {
+            setSchoolFilterState((current) => ({
+              ...current,
+              uploading: false,
+              error: getApiErrorMessage(err, 'Failed to upload school filter file.'),
+            }));
+          })
+      : Promise.resolve();
 
     try {
       const uploadPromises = [];
@@ -239,6 +327,7 @@ const ExecutionUpload = () => {
     } finally {
       setInputFileState((current) => ({ ...current, uploading: false }));
       setQuestionsFileState((current) => ({ ...current, uploading: false }));
+      await schoolFilterUploadPromise;
     }
   };
 
@@ -276,7 +365,7 @@ const ExecutionUpload = () => {
     }
 
     if (!isEditableExecution) {
-      setGlobalError('Only draft or validated executions can be updated.');
+      setGlobalError('Only draft, validated, or queued executions can be updated.');
       return;
     }
 
@@ -327,7 +416,6 @@ const ExecutionUpload = () => {
               error: uploadMessage,
             }));
           }
-
           setGlobalSuccess('');
           setGlobalError(`Upload failed: ${uploadMessage}`);
           return;
@@ -569,6 +657,98 @@ const ExecutionUpload = () => {
                     {renderFileStatus(questionsFileState, 'Criteria file')}
                   </CardContent>
                 </Card>
+              </div>
+
+              {/* School Filter — Optional */}
+              <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-4 sm:p-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-slate-100 border border-slate-200">
+                    <Filter className="h-5 w-5 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Label htmlFor="schoolFilterFile" className="text-sm font-semibold text-slate-800">School Filter CSV</Label>
+                      <span className="inline-flex items-center rounded-full border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-500">
+                        Optional
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Only rows matching schools in this list will be processed. Skip to process all schools.
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Must contain a{' '}
+                      <span className="font-mono font-medium text-slate-600">UDISE+ SCHOOL CODE</span>{' '}
+                      column
+                    </p>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      onClick={() => handleDownloadSample('school_filter')}
+                      disabled={downloadingSample.school_filter || isUploadingAny}
+                      className="mt-1 h-auto px-0 py-1 text-xs text-slate-500 hover:text-slate-700"
+                    >
+                      <Download className="mr-1 h-3 w-3" />
+                      {downloadingSample.school_filter ? 'Downloading...' : 'Download Sample'}
+                    </Button>
+                  </div>
+                </div>
+
+                {schoolFilterState.existingUploaded && (
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                    <p className="text-xs font-medium text-slate-500">Current filter:</p>
+                    <p className="mt-0.5 text-sm font-medium text-slate-900 break-all">{schoolFilterState.existingFileName}</p>
+                    {schoolFilterState.existingFileSize != null && (
+                      <p className="mt-0.5 text-xs text-slate-500">{formatFileSize(schoolFilterState.existingFileSize)}</p>
+                    )}
+                    {schoolFilterState.rowsDetected != null && (
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        <span className="font-medium">Rows:</span>{' '}
+                        <span className="font-mono">{schoolFilterState.rowsDetected.toLocaleString()}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Input
+                    id="schoolFilterFile"
+                    name="schoolFilterFile"
+                    type="file"
+                    accept=".csv"
+                    disabled={schoolFilterState.uploading || !isEditableExecution}
+                    onChange={handleSchoolFilterFileSelect}
+                    className="flex-1 !h-auto cursor-pointer border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 transition-all hover:border-slate-400 focus-visible:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:!bg-slate-600 file:px-4 file:py-2 file:text-sm file:font-medium file:!text-white file:shadow-sm file:transition-all hover:file:!bg-slate-700 hover:file:shadow-md"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto border-slate-300 text-slate-700 hover:bg-slate-100"
+                    disabled={!schoolFilterState.file || schoolFilterState.uploading || submitting || inputFileState.uploading || questionsFileState.uploading || !isEditableExecution}
+                    onClick={() => void handleSchoolFilterUpload()}
+                  >
+                    {schoolFilterState.uploading ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud className="mr-2 h-4 w-4" />
+                        {schoolFilterState.existingUploaded ? 'Replace Filter' : 'Upload Filter'}
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {schoolFilterState.error && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5">
+                    <div className="flex items-start gap-2">
+                      <XCircle className="h-4 w-4 flex-shrink-0 mt-0.5 text-rose-600" />
+                      <p className="text-sm text-rose-900">{schoolFilterState.error}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-md border border-slate-200 bg-slate-50 p-4">

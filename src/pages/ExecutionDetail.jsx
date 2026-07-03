@@ -15,6 +15,29 @@ const formatPercent = (value) => {
   return `${Math.max(0, Math.min(100, value)).toFixed(1)}%`;
 };
 
+const formatFileSize = (bytes) => {
+  if (typeof bytes !== 'number' || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const extractDisplayFileName = (filePath, fileType) => {
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    return '';
+  }
+
+  const rawName = filePath.split('/').pop() || '';
+  let decodedName = rawName;
+  try {
+    decodedName = decodeURIComponent(rawName);
+  } catch {
+    // Malformed % sequence in the stored filename; fall back to the raw name.
+  }
+  const prefix = `${fileType}_`;
+  return decodedName.startsWith(prefix) ? decodedName.slice(prefix.length) : decodedName;
+};
+
 const formatValue = (value) => {
   if (value === null || value === undefined) {
     return '-';
@@ -50,10 +73,12 @@ const ExecutionDetail = () => {
   const [previews, setPreviews] = useState({
     input: null,
     questions: null,
+    school_filter: null,
   });
   const [previewErrors, setPreviewErrors] = useState({
     input: '',
     questions: '',
+    school_filter: '',
   });
 
   const loadExecutionView = useCallback(
@@ -91,22 +116,28 @@ const ExecutionDetail = () => {
           fetchPreview('questions'),
         ]);
 
+        const schoolFilterPreview = executionDetail?.school_filter_file_url
+          ? await fetchPreview('school_filter')
+          : { data: null, error: '' };
+
         setExecution(executionDetail);
         setStatusInfo(executionStatus);
         setPreviews({
           input: inputPreview.data,
           questions: questionsPreview.data,
+          school_filter: schoolFilterPreview.data,
         });
         setPreviewErrors({
           input: inputPreview.error,
           questions: questionsPreview.error,
+          school_filter: schoolFilterPreview.error,
         });
       } catch (requestError) {
         setError(getApiErrorMessage(requestError, 'Unable to load analysis details right now.'));
         setExecution(null);
         setStatusInfo(null);
-        setPreviews({ input: null, questions: null });
-        setPreviewErrors({ input: '', questions: '' });
+        setPreviews({ input: null, questions: null, school_filter: null });
+        setPreviewErrors({ input: '', questions: '', school_filter: '' });
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -574,6 +605,22 @@ const ExecutionDetail = () => {
         <CardContent className="space-y-6">
           {renderPreviewSection('Input Data CSV', 'input')}
           {renderPreviewSection('Criteria / Questions CSV', 'questions')}
+          {execution.school_filter_file_url ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <FileText className="h-4 w-4 flex-shrink-0 text-slate-500" />
+                <div>
+                  <p className="text-sm font-medium text-slate-800">
+                    {extractDisplayFileName(execution.school_filter_file_url, 'school_filter') || execution.school_filter_file_url}
+                  </p>
+                  {typeof execution.school_filter_file_size === 'number' && (
+                    <p className="text-xs text-slate-500">{formatFileSize(execution.school_filter_file_size)}</p>
+                  )}
+                </div>
+              </div>
+              {renderPreviewSection('School Filter CSV', 'school_filter')}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>
