@@ -257,6 +257,7 @@ export const executionService = {
     program_ref_id,
     criterias_mode,
     threshold_config,
+    evidence_threshold,
   }) => {
     const payload = {
       name,
@@ -268,6 +269,9 @@ export const executionService = {
       criterias_mode,
       threshold_config,
     };
+    if (evidence_threshold != null) {
+      payload.evidence_threshold = evidence_threshold;
+    }
     const response = await apiClient.post('/executions/', payload);
     return response.data;
   },
