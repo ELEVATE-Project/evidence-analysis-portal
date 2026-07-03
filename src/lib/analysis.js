@@ -74,6 +74,12 @@ export const formatEvidenceTypes = (evidenceTypes) => {
     return '';
   }
 
+  const allKeys = Object.keys(EVIDENCE_TYPE_LABELS);
+  const isUnrestricted = evidenceTypes.length === allKeys.length && allKeys.every((key) => evidenceTypes.includes(key));
+  if (isUnrestricted) {
+    return '';
+  }
+
   return evidenceTypes.map((key) => EVIDENCE_TYPE_LABELS[key] || key).join(', ');
 };
 
