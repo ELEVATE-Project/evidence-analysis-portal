@@ -199,6 +199,10 @@ const ExecutionDetail = () => {
       },
       { label: 'Created On', value: formatDateTime(execution?.created_at) },
       { label: 'Last Updated', value: formatDateTime(execution?.updated_at) },
+      ...(execution?.threshold_config?.enable_relevant_cap === true &&
+        Number.isFinite(execution.threshold_config.max_relevant_per_user_task)
+        ? [{ label: 'Evidence Cap', value: `${execution.threshold_config.max_relevant_per_user_task} per user per task` }]
+        : []),
     ],
     [execution, evidenceTypeOptions]
   );
