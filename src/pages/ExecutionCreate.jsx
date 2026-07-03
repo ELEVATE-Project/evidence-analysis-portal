@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowRight, ChevronDown, FileText, Info, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, ChevronDown, FileText, RefreshCw, X } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -31,7 +31,6 @@ const ExecutionCreate = () => {
   const [formValues, setFormValues] = useState({
     name: '',
     selectedStateNames: [],
-    evidenceThreshold: '',
   });
 
   useEffect(() => {
@@ -45,7 +44,7 @@ const ExecutionCreate = () => {
     }
     setIsEditMode(false);
     setExecutionId('');
-    setFormValues({ name: '', selectedStateNames: [], evidenceThreshold: '' });
+    setFormValues({ name: '', selectedStateNames: [] });
   }, [executionIdFromUrl]);
 
   useEffect(() => {
@@ -89,9 +88,6 @@ const ExecutionCreate = () => {
       setFormValues({
         name: execution.name || '',
         selectedStateNames: Array.isArray(execution.states) ? execution.states : [],
-        evidenceThreshold: execution.threshold_config?.enable_relevant_cap === true
-          ? String(execution.threshold_config.max_relevant_per_user_task ?? '')
-          : '',
       });
     } catch (error) {
       setGlobalError(getApiErrorMessage(error, 'Failed to load execution.'));
@@ -127,13 +123,6 @@ const ExecutionCreate = () => {
       setGlobalError('Please select at least one state.');
       return false;
     }
-    if (formValues.evidenceThreshold !== '') {
-      const n = Number(formValues.evidenceThreshold);
-      if (!Number.isInteger(n) || n < 1 || n > 100) {
-        setGlobalError('Evidence threshold must be a whole number between 1 and 100.');
-        return false;
-      }
-    }
     return true;
   };
 
@@ -144,22 +133,12 @@ const ExecutionCreate = () => {
 
     setCreatingAnalysis(true);
     try {
-      // Number() here matches the parser used in validateCreateForm — parseInt() would
-      // silently disagree on inputs like "2e1" (parseInt -> 2, Number -> 20).
-      const thresholdValue = formValues.evidenceThreshold !== ''
-        ? Number(formValues.evidenceThreshold)
-        : undefined;
-
       if (isEditMode && executionId) {
-        // Update existing draft. evidence_threshold is always included (as a number or
-        // null) so clearing the field explicitly removes a previously-set threshold —
-        // PATCH semantics mean an omitted key would otherwise leave the old value intact.
-        const updatePayload = {
+        // Update existing draft
+        const response = await executionService.updateExecution(executionId, {
           name: formValues.name.trim(),
           states: formValues.selectedStateNames,
-          evidence_threshold: thresholdValue !== undefined ? thresholdValue : null,
-        };
-        const response = await executionService.updateExecution(executionId, updatePayload);
+        });
         setGlobalSuccess('Analysis updated successfully.');
         return response?.id || executionId;
       } else {
@@ -168,7 +147,6 @@ const ExecutionCreate = () => {
           name: formValues.name.trim(),
           csv_type_id: DEFAULT_CSV_TYPE_ID,
           states: formValues.selectedStateNames,
-          ...(thresholdValue !== undefined ? { evidence_threshold: thresholdValue } : {}),
         });
         const id = response?.id || '';
         setExecutionId(id);
@@ -316,41 +294,6 @@ const ExecutionCreate = () => {
                       {stateError}
                     </p>
                   )}
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <Label htmlFor="evidenceThreshold" className="text-sm font-semibold text-slate-800">
-                      Maximum Valid Evidences{' '}
-                      <span className="font-normal text-slate-500">(optional)</span>
-                    </Label>
-                    <span className="group relative inline-flex">
-                      <button
-                        type="button"
-                        aria-label="What is Maximum Valid Evidences?"
-                        className="rounded-full text-slate-400 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <Info className="h-3.5 w-3.5" />
-                      </button>
-                      <span
-                        role="tooltip"
-                        className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-64 -translate-x-1/2 rounded-md bg-slate-800 px-3 py-2 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                      >
-                        Once this number of valid evidences is reached for a task, no further evidences will be checked for that user. Leave blank to evaluate all rows.
-                      </span>
-                    </span>
-                  </div>
-                  <Input
-                    id="evidenceThreshold"
-                    name="evidenceThreshold"
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={formValues.evidenceThreshold}
-                    onChange={handleTextChange}
-                    placeholder="e.g. 3"
-                    className="border-slate-300 bg-white text-slate-800 hover:border-blue-400 focus:border-blue-500"
-                  />
                 </div>
               </div>
 
