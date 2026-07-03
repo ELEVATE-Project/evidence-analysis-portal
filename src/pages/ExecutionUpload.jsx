@@ -35,7 +35,12 @@ const extractDisplayFileName = (filePath, fileType) => {
   }
 
   const rawName = filePath.split('/').pop() || '';
-  const decodedName = decodeURIComponent(rawName);
+  let decodedName = rawName;
+  try {
+    decodedName = decodeURIComponent(rawName);
+  } catch {
+    // Malformed % sequence in the stored filename; fall back to the raw name.
+  }
   const prefix = `${fileType}_`;
   return decodedName.startsWith(prefix) ? decodedName.slice(prefix.length) : decodedName;
 };
