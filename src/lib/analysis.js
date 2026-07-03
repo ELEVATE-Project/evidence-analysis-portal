@@ -63,24 +63,21 @@ export const getAnalysisStatusMeta = (status) => {
   };
 };
 
-export const EVIDENCE_TYPE_LABELS = {
-  image: 'Image',
-  pdf: 'PDF',
-  excel: 'Excel',
-};
-
-export const formatEvidenceTypes = (evidenceTypes) => {
+// evidenceTypeOptions: [{ key, label }] fetched from configService.listEvidenceTypes()
+export const formatEvidenceTypes = (evidenceTypes, evidenceTypeOptions = []) => {
   if (!Array.isArray(evidenceTypes) || evidenceTypes.length === 0) {
     return '';
   }
 
-  const allKeys = Object.keys(EVIDENCE_TYPE_LABELS);
-  const isUnrestricted = evidenceTypes.length === allKeys.length && allKeys.every((key) => evidenceTypes.includes(key));
+  const allKeys = evidenceTypeOptions.map((option) => option.key);
+  const isUnrestricted =
+    allKeys.length > 0 && evidenceTypes.length === allKeys.length && allKeys.every((key) => evidenceTypes.includes(key));
   if (isUnrestricted) {
     return '';
   }
 
-  return evidenceTypes.map((key) => EVIDENCE_TYPE_LABELS[key] || key).join(', ');
+  const labelByKey = Object.fromEntries(evidenceTypeOptions.map((option) => [option.key, option.label]));
+  return evidenceTypes.map((key) => labelByKey[key] || key).join(', ');
 };
 
 export const formatDateTime = (value) => {

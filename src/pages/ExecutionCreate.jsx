@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowRight, ChevronDown, FileText, RefreshCw, X } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
@@ -6,14 +6,10 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { ENV } from '../config/env';
-import { entityService, executionService, getApiErrorMessage } from '../services/executionService';
-import { EVIDENCE_TYPE_LABELS } from '../lib/analysis';
+import { configService, entityService, executionService, getApiErrorMessage } from '../services/executionService';
 import ExecutionWizardStepper from '../components/executions/ExecutionWizardStepper';
 
 const DEFAULT_CSV_TYPE_ID = ENV.DEFAULT_CSV_TYPE_ID;
-
-const EVIDENCE_TYPES = Object.entries(EVIDENCE_TYPE_LABELS).map(([key, label]) => ({ key, label }));
-const ALL_EVIDENCE_TYPE_KEYS = EVIDENCE_TYPES.map((evidenceType) => evidenceType.key);
 
 const ExecutionCreate = () => {
   const navigate = useNavigate();
@@ -25,6 +21,9 @@ const ExecutionCreate = () => {
   const [stateError, setStateError] = useState('');
   const [stateDropdownOpen, setStateDropdownOpen] = useState(false);
   const stateDropdownRef = useRef(null);
+  const [evidenceTypeOptions, setEvidenceTypeOptions] = useState([]);
+  const [evidenceTypesLoading, setEvidenceTypesLoading] = useState(false);
+  const [evidenceTypeError, setEvidenceTypeError] = useState('');
   const [creatingAnalysis, setCreatingAnalysis] = useState(false);
   const [loadingExecution, setLoadingExecution] = useState(false);
   const [globalError, setGlobalError] = useState('');
@@ -32,25 +31,35 @@ const ExecutionCreate = () => {
   const [executionId, setExecutionId] = useState(executionIdFromUrl || '');
   const [isEditMode, setIsEditMode] = useState(false);
 
+  const allEvidenceTypeKeys = useMemo(
+    () => evidenceTypeOptions.map((evidenceType) => evidenceType.key),
+    [evidenceTypeOptions]
+  );
+
   const [formValues, setFormValues] = useState({
     name: '',
     selectedStateNames: [],
-    selectedEvidenceTypes: ALL_EVIDENCE_TYPE_KEYS,
+    selectedEvidenceTypes: [],
   });
 
   useEffect(() => {
     void loadStates();
+    void loadEvidenceTypes();
   }, []);
 
   useEffect(() => {
     if (executionIdFromUrl) {
       void loadExecution(executionIdFromUrl);
-      return;
     }
-    setIsEditMode(false);
-    setExecutionId('');
-    setFormValues({ name: '', selectedStateNames: [], selectedEvidenceTypes: ALL_EVIDENCE_TYPE_KEYS });
   }, [executionIdFromUrl]);
+
+  useEffect(() => {
+    if (!executionIdFromUrl) {
+      setIsEditMode(false);
+      setExecutionId('');
+      setFormValues({ name: '', selectedStateNames: [], selectedEvidenceTypes: allEvidenceTypeKeys });
+    }
+  }, [executionIdFromUrl, allEvidenceTypeKeys]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -76,6 +85,22 @@ const ExecutionCreate = () => {
     }
   };
 
+  const loadEvidenceTypes = async () => {
+    setEvidenceTypesLoading(true);
+    setEvidenceTypeError('');
+    try {
+      const items = await configService.listEvidenceTypes();
+      setEvidenceTypeOptions(items);
+      return items;
+    } catch (error) {
+      setEvidenceTypeOptions([]);
+      setEvidenceTypeError(getApiErrorMessage(error, 'Unable to load evidence types. Please try again.'));
+      return [];
+    } finally {
+      setEvidenceTypesLoading(false);
+    }
+  };
+
   const loadExecution = async (id) => {
     setLoadingExecution(true);
     setGlobalError('');
@@ -88,12 +113,17 @@ const ExecutionCreate = () => {
         return;
       }
 
+      // Resolve the unrestricted default independently of evidenceTypeOptions state,
+      // which may not have finished loading yet.
+      const knownKeys = evidenceTypeOptions.length > 0 ? evidenceTypeOptions : await loadEvidenceTypes();
+      const allKeys = knownKeys.map((evidenceType) => evidenceType.key);
+
       setIsEditMode(true);
       setExecutionId(id);
       setFormValues({
         name: execution.name || '',
         selectedStateNames: Array.isArray(execution.states) ? execution.states : [],
-        selectedEvidenceTypes: execution.processing_config?.evidence_types || ALL_EVIDENCE_TYPE_KEYS,
+        selectedEvidenceTypes: execution.processing_config?.evidence_types || allKeys,
       });
     } catch (error) {
       setGlobalError(getApiErrorMessage(error, 'Failed to load execution.'));
@@ -165,9 +195,9 @@ const ExecutionCreate = () => {
         setGlobalSuccess('Analysis updated successfully.');
         return response?.id || executionId;
       } else {
-        // Create new draft — omit evidence_types when unrestricted (all three checked)
+        // Create new draft — omit evidence_types when unrestricted (all types checked)
         const evidenceTypes =
-          formValues.selectedEvidenceTypes.length < ALL_EVIDENCE_TYPE_KEYS.length
+          formValues.selectedEvidenceTypes.length < allEvidenceTypeKeys.length
             ? formValues.selectedEvidenceTypes
             : undefined;
         const response = await executionService.createExecutionDraft({
@@ -326,25 +356,35 @@ const ExecutionCreate = () => {
 
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-slate-800">Evidence Types</Label>
-                  <div className="flex flex-wrap gap-4">
-                    {EVIDENCE_TYPES.map((evidenceType) => (
-                      <label
-                        key={evidenceType.key}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formValues.selectedEvidenceTypes.includes(evidenceType.key)}
-                          onChange={() => handleEvidenceTypeToggle(evidenceType.key)}
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600"
-                        />
-                        <span className="text-sm text-slate-700">{evidenceType.label}</span>
-                      </label>
-                    ))}
-                  </div>
+                  {evidenceTypesLoading ? (
+                    <p className="text-sm text-slate-500">Loading evidence types...</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-4">
+                      {evidenceTypeOptions.map((evidenceType) => (
+                        <label
+                          key={evidenceType.key}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formValues.selectedEvidenceTypes.includes(evidenceType.key)}
+                            onChange={() => handleEvidenceTypeToggle(evidenceType.key)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                          />
+                          <span className="text-sm text-slate-700">{evidenceType.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-xs text-slate-500">
                     Leave all checked to validate every evidence type. Uncheck to restrict analysis to specific types.
                   </p>
+                  {evidenceTypeError && (
+                    <p className="flex items-center gap-1 text-xs text-rose-700">
+                      <AlertCircle className="h-3 w-3" />
+                      {evidenceTypeError}
+                    </p>
+                  )}
                 </div>
               </div>
 
