@@ -234,6 +234,7 @@ const ExecutionUpload = () => {
   const uploadSelectedFiles = async () => {
     const selectedInputFile = inputFileState.file;
     const selectedQuestionsFile = questionsFileState.file;
+    const selectedSchoolFilterFile = schoolFilterState.file;
 
     if (selectedInputFile) {
       setInputFileState((current) => ({ ...current, uploading: true, error: '' }));
@@ -241,11 +242,35 @@ const ExecutionUpload = () => {
     if (selectedQuestionsFile) {
       setQuestionsFileState((current) => ({ ...current, uploading: true, error: '' }));
     }
-
-    const selectedSchoolFilterFile = schoolFilterState.file;
     if (selectedSchoolFilterFile) {
       setSchoolFilterState((current) => ({ ...current, uploading: true, error: '' }));
     }
+
+    // School filter is optional: upload it independently so a failure here
+    // never aborts the required input/questions upload+validation flow.
+    const schoolFilterUploadPromise = selectedSchoolFilterFile
+      ? executionService
+          .uploadSchoolFilterFile(executionId, selectedSchoolFilterFile)
+          .then((result) => {
+            setSchoolFilterState((current) => ({
+              ...current,
+              uploading: false,
+              rowsDetected: result?.rows_detected ?? null,
+              existingFileName: selectedSchoolFilterFile.name || current.existingFileName,
+              existingFileSize:
+                typeof selectedSchoolFilterFile.size === 'number' ? selectedSchoolFilterFile.size : current.existingFileSize,
+              existingUploaded: true,
+              error: '',
+            }));
+          })
+          .catch((err) => {
+            setSchoolFilterState((current) => ({
+              ...current,
+              uploading: false,
+              error: getApiErrorMessage(err, 'Failed to upload school filter file.'),
+            }));
+          })
+      : Promise.resolve();
 
     try {
       const uploadPromises = [];
@@ -263,13 +288,6 @@ const ExecutionUpload = () => {
             .then((result) => ({ fileType: 'questions', result }))
         );
       }
-      if (selectedSchoolFilterFile) {
-        uploadPromises.push(
-          executionService
-            .uploadSchoolFilterFile(executionId, selectedSchoolFilterFile)
-            .then((result) => ({ fileType: 'school_filter', result }))
-        );
-      }
 
       const uploadResults = await Promise.all(uploadPromises);
       uploadResults.forEach((uploadResult) => {
@@ -284,15 +302,6 @@ const ExecutionUpload = () => {
             existingFileName: selectedInputFile?.name || current.existingFileName,
             existingUploaded: true,
             existingValidated: false,
-          }));
-        } else if (uploadResult.fileType === 'school_filter') {
-          setSchoolFilterState((current) => ({
-            ...current,
-            rowsDetected: uploadResult.result?.rows_detected ?? null,
-            existingFileName: selectedSchoolFilterFile?.name || current.existingFileName,
-            existingFileSize: typeof selectedSchoolFilterFile?.size === 'number' ? selectedSchoolFilterFile.size : current.existingFileSize,
-            existingUploaded: true,
-            error: '',
           }));
         } else {
           setQuestionsFileState((current) => ({
@@ -313,7 +322,7 @@ const ExecutionUpload = () => {
     } finally {
       setInputFileState((current) => ({ ...current, uploading: false }));
       setQuestionsFileState((current) => ({ ...current, uploading: false }));
-      setSchoolFilterState((current) => ({ ...current, uploading: false }));
+      await schoolFilterUploadPromise;
     }
   };
 
@@ -402,13 +411,6 @@ const ExecutionUpload = () => {
               error: uploadMessage,
             }));
           }
-          if (schoolFilterState.file) {
-            setSchoolFilterState((current) => ({
-              ...current,
-              error: uploadMessage,
-            }));
-          }
-
           setGlobalSuccess('');
           setGlobalError(`Upload failed: ${uploadMessage}`);
           return;
