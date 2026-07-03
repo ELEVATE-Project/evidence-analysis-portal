@@ -63,6 +63,23 @@ export const getAnalysisStatusMeta = (status) => {
   };
 };
 
+// evidenceTypeOptions: [{ key, label }] fetched from configService.listEvidenceTypes()
+export const formatEvidenceTypes = (evidenceTypes, evidenceTypeOptions = []) => {
+  if (!Array.isArray(evidenceTypes) || evidenceTypes.length === 0) {
+    return '';
+  }
+
+  const allKeys = evidenceTypeOptions.map((option) => option.key);
+  const isUnrestricted =
+    allKeys.length > 0 && evidenceTypes.length === allKeys.length && allKeys.every((key) => evidenceTypes.includes(key));
+  if (isUnrestricted) {
+    return '';
+  }
+
+  const labelByKey = Object.fromEntries(evidenceTypeOptions.map((option) => [option.key, option.label]));
+  return evidenceTypes.map((key) => labelByKey[key] || key).join(', ');
+};
+
 export const formatDateTime = (value) => {
   if (!value) {
     return '-';

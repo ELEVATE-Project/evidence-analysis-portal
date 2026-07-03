@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Download, FileSearch, FileText, Loader2, Pencil, RefreshCw, RotateCcw } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { executionService, getApiErrorMessage, reportService } from '../services/executionService';
-import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
+import { configService, executionService, getApiErrorMessage, reportService } from '../services/executionService';
+import { formatDateTime, formatEvidenceTypes, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
 
 const PREVIEW_LIMIT = 10;
 
@@ -46,6 +46,7 @@ const ExecutionDetail = () => {
 
   const [execution, setExecution] = useState(null);
   const [statusInfo, setStatusInfo] = useState(null);
+  const [evidenceTypeOptions, setEvidenceTypeOptions] = useState([]);
   const [previews, setPreviews] = useState({
     input: null,
     questions: null,
@@ -119,6 +120,19 @@ const ExecutionDetail = () => {
   }, [loadExecutionView]);
 
   useEffect(() => {
+    const loadEvidenceTypeOptions = async () => {
+      try {
+        const items = await configService.listEvidenceTypes();
+        setEvidenceTypeOptions(items);
+      } catch (requestError) {
+        // Silent failure; formatEvidenceTypes falls back to raw keys without labels.
+        setEvidenceTypeOptions([]);
+      }
+    };
+    void loadEvidenceTypeOptions();
+  }, []);
+
+  useEffect(() => {
     if (!executionId || loading) {
       return undefined;
     }
@@ -179,6 +193,10 @@ const ExecutionDetail = () => {
     () => [
       { label: 'State', value: execution?.states?.join(', ') || null },
       { label: 'Program', value: execution?.program_name },
+      {
+        label: 'Evidence Types',
+        value: formatEvidenceTypes(execution?.processing_config?.evidence_types, evidenceTypeOptions) || 'All types',
+      },
       { label: 'Created On', value: formatDateTime(execution?.created_at) },
       { label: 'Last Updated', value: formatDateTime(execution?.updated_at) },
       ...(execution?.threshold_config?.enable_relevant_cap === true &&
@@ -186,7 +204,7 @@ const ExecutionDetail = () => {
         ? [{ label: 'Evidence Cap', value: `${execution.threshold_config.max_relevant_per_user_task} per user per task` }]
         : []),
     ],
-    [execution]
+    [execution, evidenceTypeOptions]
   );
 
   const handleDownloadReport = useCallback(async () => {

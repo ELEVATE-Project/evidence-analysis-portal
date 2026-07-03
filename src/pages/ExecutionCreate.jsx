@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowRight, ChevronDown, FileText, Info, RefreshCw, X } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { ENV } from '../config/env';
-import { entityService, executionService, getApiErrorMessage } from '../services/executionService';
+import { configService, entityService, executionService, getApiErrorMessage } from '../services/executionService';
 import ExecutionWizardStepper from '../components/executions/ExecutionWizardStepper';
 
 const DEFAULT_CSV_TYPE_ID = ENV.DEFAULT_CSV_TYPE_ID;
@@ -21,6 +21,9 @@ const ExecutionCreate = () => {
   const [stateError, setStateError] = useState('');
   const [stateDropdownOpen, setStateDropdownOpen] = useState(false);
   const stateDropdownRef = useRef(null);
+  const [evidenceTypeOptions, setEvidenceTypeOptions] = useState([]);
+  const [evidenceTypesLoading, setEvidenceTypesLoading] = useState(false);
+  const [evidenceTypeError, setEvidenceTypeError] = useState('');
   const [creatingAnalysis, setCreatingAnalysis] = useState(false);
   const [loadingExecution, setLoadingExecution] = useState(false);
   const [globalError, setGlobalError] = useState('');
@@ -28,25 +31,36 @@ const ExecutionCreate = () => {
   const [executionId, setExecutionId] = useState(executionIdFromUrl || '');
   const [isEditMode, setIsEditMode] = useState(false);
 
+  const allEvidenceTypeKeys = useMemo(
+    () => evidenceTypeOptions.map((evidenceType) => evidenceType.key),
+    [evidenceTypeOptions]
+  );
+
   const [formValues, setFormValues] = useState({
     name: '',
     selectedStateNames: [],
+    selectedEvidenceTypes: [],
     evidenceThreshold: '',
   });
 
   useEffect(() => {
     void loadStates();
+    void loadEvidenceTypes();
   }, []);
 
   useEffect(() => {
     if (executionIdFromUrl) {
       void loadExecution(executionIdFromUrl);
-      return;
     }
-    setIsEditMode(false);
-    setExecutionId('');
-    setFormValues({ name: '', selectedStateNames: [], evidenceThreshold: '' });
   }, [executionIdFromUrl]);
+
+  useEffect(() => {
+    if (!executionIdFromUrl) {
+      setIsEditMode(false);
+      setExecutionId('');
+      setFormValues({ name: '', selectedStateNames: [], selectedEvidenceTypes: allEvidenceTypeKeys, evidenceThreshold: '' });
+    }
+  }, [executionIdFromUrl, allEvidenceTypeKeys]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -72,6 +86,22 @@ const ExecutionCreate = () => {
     }
   };
 
+  const loadEvidenceTypes = async () => {
+    setEvidenceTypesLoading(true);
+    setEvidenceTypeError('');
+    try {
+      const items = await configService.listEvidenceTypes();
+      setEvidenceTypeOptions(items);
+      return items;
+    } catch (error) {
+      setEvidenceTypeOptions([]);
+      setEvidenceTypeError(getApiErrorMessage(error, 'Unable to load evidence types. Please try again.'));
+      return [];
+    } finally {
+      setEvidenceTypesLoading(false);
+    }
+  };
+
   const loadExecution = async (id) => {
     setLoadingExecution(true);
     setGlobalError('');
@@ -84,11 +114,17 @@ const ExecutionCreate = () => {
         return;
       }
 
+      // Resolve the unrestricted default independently of evidenceTypeOptions state,
+      // which may not have finished loading yet.
+      const knownKeys = evidenceTypeOptions.length > 0 ? evidenceTypeOptions : await loadEvidenceTypes();
+      const allKeys = knownKeys.map((evidenceType) => evidenceType.key);
+
       setIsEditMode(true);
       setExecutionId(id);
       setFormValues({
         name: execution.name || '',
         selectedStateNames: Array.isArray(execution.states) ? execution.states : [],
+        selectedEvidenceTypes: execution.processing_config?.evidence_types || allKeys,
         evidenceThreshold: execution.threshold_config?.enable_relevant_cap === true
           ? String(execution.threshold_config.max_relevant_per_user_task ?? '')
           : '',
@@ -118,6 +154,17 @@ const ExecutionCreate = () => {
     });
   };
 
+  const handleEvidenceTypeToggle = (evidenceTypeKey) => {
+    setGlobalError('');
+    setGlobalSuccess('');
+    setFormValues((current) => {
+      const next = current.selectedEvidenceTypes.includes(evidenceTypeKey)
+        ? current.selectedEvidenceTypes.filter((key) => key !== evidenceTypeKey)
+        : [...current.selectedEvidenceTypes, evidenceTypeKey];
+      return { ...current, selectedEvidenceTypes: next };
+    });
+  };
+
   const validateCreateForm = () => {
     if (!formValues.name.trim()) {
       setGlobalError('Analysis name is required.');
@@ -125,6 +172,10 @@ const ExecutionCreate = () => {
     }
     if (formValues.selectedStateNames.length === 0) {
       setGlobalError('Please select at least one state.');
+      return false;
+    }
+    if (formValues.selectedEvidenceTypes.length === 0) {
+      setGlobalError('Please select at least one evidence type.');
       return false;
     }
     if (formValues.evidenceThreshold !== '') {
@@ -151,23 +202,31 @@ const ExecutionCreate = () => {
         : undefined;
 
       if (isEditMode && executionId) {
-        // Update existing draft. evidence_threshold is always included (as a number or
-        // null) so clearing the field explicitly removes a previously-set threshold —
-        // PATCH semantics mean an omitted key would otherwise leave the old value intact.
+        // Update existing draft. evidence_types is always sent so an update can clear
+        // a prior restriction by re-checking all types. evidence_threshold is always
+        // included (as a number or null) so clearing the field explicitly removes a
+        // previously-set threshold — PATCH semantics mean an omitted key would
+        // otherwise leave the old value intact.
         const updatePayload = {
           name: formValues.name.trim(),
           states: formValues.selectedStateNames,
+          evidence_types: formValues.selectedEvidenceTypes,
           evidence_threshold: thresholdValue !== undefined ? thresholdValue : null,
         };
         const response = await executionService.updateExecution(executionId, updatePayload);
         setGlobalSuccess('Analysis updated successfully.');
         return response?.id || executionId;
       } else {
-        // Create new draft
+        // Create new draft — omit evidence_types when unrestricted (all types checked)
+        const evidenceTypes =
+          formValues.selectedEvidenceTypes.length < allEvidenceTypeKeys.length
+            ? formValues.selectedEvidenceTypes
+            : undefined;
         const response = await executionService.createExecutionDraft({
           name: formValues.name.trim(),
           csv_type_id: DEFAULT_CSV_TYPE_ID,
           states: formValues.selectedStateNames,
+          evidence_types: evidenceTypes,
           ...(thresholdValue !== undefined ? { evidence_threshold: thresholdValue } : {}),
         });
         const id = response?.id || '';
@@ -314,6 +373,39 @@ const ExecutionCreate = () => {
                     <p className="flex items-center gap-1 text-xs text-rose-700">
                       <AlertCircle className="h-3 w-3" />
                       {stateError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-slate-800">Evidence Types</Label>
+                  {evidenceTypesLoading ? (
+                    <p className="text-sm text-slate-500">Loading evidence types...</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-4">
+                      {evidenceTypeOptions.map((evidenceType) => (
+                        <label
+                          key={evidenceType.key}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formValues.selectedEvidenceTypes.includes(evidenceType.key)}
+                            onChange={() => handleEvidenceTypeToggle(evidenceType.key)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                          />
+                          <span className="text-sm text-slate-700">{evidenceType.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-500">
+                    Leave all checked to validate every evidence type. Uncheck to restrict analysis to specific types.
+                  </p>
+                  {evidenceTypeError && (
+                    <p className="flex items-center gap-1 text-xs text-rose-700">
+                      <AlertCircle className="h-3 w-3" />
+                      {evidenceTypeError}
                     </p>
                   )}
                 </div>

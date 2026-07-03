@@ -100,6 +100,13 @@ const normalizeSourceTypeItem = (item, index) => {
   };
 };
 
+const normalizeEvidenceTypeItem = (item, index) => {
+  const fallbackKey = `evidence_type_${index + 1}`;
+  const key = typeof item?.key === 'string' && item.key.trim() ? item.key.trim() : fallbackKey;
+  const label = typeof item?.label === 'string' && item.label.trim() ? item.label.trim() : key;
+  return { key, label };
+};
+
 const uploadFileToSignedUrl = async (signedUpload, file) => {
   const headers = { ...(signedUpload?.headers || {}) };
   const hasCustomHeaders = Object.keys(headers).length > 0;
@@ -257,6 +264,7 @@ export const executionService = {
     program_ref_id,
     criterias_mode,
     threshold_config,
+    evidence_types,
     evidence_threshold,
   }) => {
     const payload = {
@@ -268,6 +276,7 @@ export const executionService = {
       program_ref_id,
       criterias_mode,
       threshold_config,
+      evidence_types,
     };
     if (evidence_threshold != null) {
       payload.evidence_threshold = evidence_threshold;
@@ -477,6 +486,14 @@ export const configService = {
   getSampleCsvUrl: async (typeId, fileType) => {
     const response = await apiClient.get(`/config/csv-source-types/${typeId}/sample/${fileType}`);
     return response.data;
+  },
+
+  listEvidenceTypes: async () => {
+    const response = await apiClient.get('/config/list', {
+      params: { type: 'evidence_type' },
+    });
+    const items = parseConfigResponse(response.data, 'evidence types');
+    return items.map((item, index) => normalizeEvidenceTypeItem(item, index));
   },
 };
 
