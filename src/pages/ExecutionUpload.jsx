@@ -120,7 +120,7 @@ const ExecutionUpload = () => {
 
     setSchoolFilterState((current) => ({
       ...current,
-      existingFileName: execution?.school_filter_file_url ? (execution.school_filter_file_url.split('/').pop() || '') : '',
+      existingFileName: extractDisplayFileName(execution?.school_filter_file_url, 'school_filter'),
       existingFileSize: typeof execution?.school_filter_file_size === 'number' ? execution.school_filter_file_size : null,
       existingUploaded: Boolean(execution?.school_filter_file_url),
       error: '',
