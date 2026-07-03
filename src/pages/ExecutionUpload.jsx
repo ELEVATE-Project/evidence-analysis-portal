@@ -56,7 +56,7 @@ const ExecutionUpload = () => {
   const [submitting, setSubmitting] = useState(false);
   const [executionStatus, setExecutionStatus] = useState('');
   const [csvTypeId, setCsvTypeId] = useState(null);
-  const [downloadingSample, setDownloadingSample] = useState({ input: false, criteria: false });
+  const [downloadingSample, setDownloadingSample] = useState({ input: false, criteria: false, school_filter: false });
   const [inputFileState, setInputFileState] = useState(initialFileState);
   const [questionsFileState, setQuestionsFileState] = useState(initialFileState);
   const [schoolFilterState, setSchoolFilterState] = useState({
@@ -680,14 +680,17 @@ const ExecutionUpload = () => {
                       <span className="font-mono font-medium text-slate-600">UDISE+ SCHOOL CODE</span>{' '}
                       column
                     </p>
-                    <a
-                      href="/sample_school_filter.csv"
-                      download="sample_school_filter.csv"
-                      className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      onClick={() => handleDownloadSample('school_filter')}
+                      disabled={downloadingSample.school_filter || isUploadingAny}
+                      className="mt-1 h-auto px-0 py-1 text-xs text-slate-500 hover:text-slate-700"
                     >
-                      <Download className="h-3 w-3" />
-                      Download Sample
-                    </a>
+                      <Download className="mr-1 h-3 w-3" />
+                      {downloadingSample.school_filter ? 'Downloading...' : 'Download Sample'}
+                    </Button>
                   </div>
                 </div>
 
