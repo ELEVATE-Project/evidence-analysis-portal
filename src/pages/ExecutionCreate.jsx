@@ -125,8 +125,8 @@ const ExecutionCreate = () => {
         name: execution.name || '',
         selectedStateNames: Array.isArray(execution.states) ? execution.states : [],
         selectedEvidenceTypes: execution.processing_config?.evidence_types || allKeys,
-        evidenceThreshold: execution.threshold_config?.enable_relevant_cap === true
-          ? String(execution.threshold_config.max_relevant_per_user_task ?? '')
+        evidenceThreshold: typeof execution.threshold_config?.max_relevant_per_user_task === 'number'
+          ? String(execution.threshold_config.max_relevant_per_user_task)
           : '',
       });
     } catch (error) {
