@@ -308,6 +308,10 @@ const ExecutionValidate = () => {
             <div className="space-y-5 pt-2">
               {renderCsvPreviewSection(validationResult?.input_file, 'Input Data CSV')}
               {renderCsvPreviewSection(validationResult?.questions_file, 'Criteria / Questions CSV')}
+              {/* Optional — only present in the response when a school-filter file was
+                  actually uploaded for this execution. */}
+              {validationResult?.school_filter_file &&
+                renderCsvPreviewSection(validationResult.school_filter_file, 'School Filter CSV')}
             </div>
           )}
         </CardContent>
