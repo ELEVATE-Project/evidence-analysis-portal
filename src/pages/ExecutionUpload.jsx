@@ -57,6 +57,8 @@ const ExecutionUpload = () => {
   const [executionStatus, setExecutionStatus] = useState('');
   const [csvTypeId, setCsvTypeId] = useState(null);
   const [downloadingSample, setDownloadingSample] = useState({ input: false, criteria: false, school_filter: false });
+  const [schoolFilterColumnName, setSchoolFilterColumnName] = useState('');
+  const [schoolFilterEnabled, setSchoolFilterEnabled] = useState(false);
   const [inputFileState, setInputFileState] = useState(initialFileState);
   const [questionsFileState, setQuestionsFileState] = useState(initialFileState);
   const [schoolFilterState, setSchoolFilterState] = useState({
@@ -160,6 +162,24 @@ const ExecutionUpload = () => {
 
     void loadExecution();
   }, [executionId]);
+
+  useEffect(() => {
+    // Tenant-configured (CsvSourceType.school_filter_config.required_column on the
+    // backend) — no hardcoded default here. If the fetch fails, the hint below falls
+    // back to generic wording rather than asserting a column name that could be wrong
+    // for this tenant. `enabled` gates whether the upload section renders at all —
+    // false until the tenant has a sample school-filter CSV configured.
+    configService
+      .getSchoolFilterConfig()
+      .then(({ requiredColumn, enabled }) => {
+        setSchoolFilterColumnName(requiredColumn);
+        setSchoolFilterEnabled(enabled);
+      })
+      .catch(() => {
+        setSchoolFilterColumnName('');
+        setSchoolFilterEnabled(false);
+      });
+  }, []);
 
   const handleFileSelection = (fileType, event) => {
     const selectedFile = event.target.files?.[0] || null;
@@ -659,7 +679,11 @@ const ExecutionUpload = () => {
                 </Card>
               </div>
 
-              {/* School Filter — Optional */}
+              {/* School Filter — Optional. Hidden unless the tenant has the feature configured
+                  (school_filter_enabled from /config?type=school_filter), except we still show
+                  it if a filter file was already uploaded on this execution, so existing state
+                  never disappears out from under the user. */}
+              {(schoolFilterEnabled || schoolFilterState.existingUploaded) && (
               <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-4 sm:p-5 space-y-4">
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-slate-100 border border-slate-200">
@@ -676,9 +700,15 @@ const ExecutionUpload = () => {
                       Only rows matching schools in this list will be processed. Skip to process all schools.
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
-                      Must contain a{' '}
-                      <span className="font-mono font-medium text-slate-600">UDISE+ SCHOOL CODE</span>{' '}
-                      column
+                      {schoolFilterColumnName ? (
+                        <>
+                          Must contain a{' '}
+                          <span className="font-mono font-medium text-slate-600">{schoolFilterColumnName}</span>{' '}
+                          column
+                        </>
+                      ) : (
+                        'Must contain the required school-code column — see the sample file below for the exact name.'
+                      )}
                     </p>
                     <Button
                       type="button"
@@ -750,6 +780,7 @@ const ExecutionUpload = () => {
                   </div>
                 )}
               </div>
+              )}
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-md border border-slate-200 bg-slate-50 p-4">
                   <Button 

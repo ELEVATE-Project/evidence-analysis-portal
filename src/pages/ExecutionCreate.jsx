@@ -180,8 +180,8 @@ const ExecutionCreate = () => {
     }
     if (formValues.evidenceThreshold !== '') {
       const n = Number(formValues.evidenceThreshold);
-      if (!Number.isInteger(n) || n < 1 || n > 100) {
-        setGlobalError('Evidence threshold must be a whole number between 1 and 100.');
+      if (!Number.isInteger(n) || n < 1 || n > 10) {
+        setGlobalError('Evidence threshold must be a whole number between 1 and 10.');
         return false;
       }
     }
@@ -217,16 +217,14 @@ const ExecutionCreate = () => {
         setGlobalSuccess('Analysis updated successfully.');
         return response?.id || executionId;
       } else {
-        // Create new draft — omit evidence_types when unrestricted (all types checked)
-        const evidenceTypes =
-          formValues.selectedEvidenceTypes.length < allEvidenceTypeKeys.length
-            ? formValues.selectedEvidenceTypes
-            : undefined;
+        // evidence_types is always sent, even when every type is checked — the backend
+        // requires it (fail loud on a missing filter instead of silently processing
+        // every type).
         const response = await executionService.createExecutionDraft({
           name: formValues.name.trim(),
           csv_type_id: DEFAULT_CSV_TYPE_ID,
           states: formValues.selectedStateNames,
-          evidence_types: evidenceTypes,
+          evidence_types: formValues.selectedEvidenceTypes,
           ...(thresholdValue !== undefined ? { evidence_threshold: thresholdValue } : {}),
         });
         const id = response?.id || '';
@@ -437,7 +435,7 @@ const ExecutionCreate = () => {
                     name="evidenceThreshold"
                     type="number"
                     min={1}
-                    max={100}
+                    max={10}
                     value={formValues.evidenceThreshold}
                     onChange={handleTextChange}
                     placeholder="e.g. 3"
