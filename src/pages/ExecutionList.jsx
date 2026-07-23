@@ -5,7 +5,7 @@ import { entityService, executionService, getApiErrorMessage, reportService } fr
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
+import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta, isReportViewSupported } from '../lib/analysis';
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
@@ -457,8 +457,14 @@ const ExecutionList = () => {
                                 <>
                                   <Button
                                     type="button"
-                                    className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
-                                    onClick={() => navigate(`/reports/${analysis.id}`)}
+                                    className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700 disabled:cursor-not-allowed"
+                                    onClick={() => isReportViewSupported(analysis.csv_type_id) && navigate(`/reports/${analysis.id}`)}
+                                    disabled={!isReportViewSupported(analysis.csv_type_id)}
+                                    title={
+                                      isReportViewSupported(analysis.csv_type_id)
+                                        ? undefined
+                                        : 'Report view is not available yet for this CSV type. Use Download instead.'
+                                    }
                                   >
                                     <FileText className="mr-1.5 h-3.5 w-3.5" />
                                     View Report

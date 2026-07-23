@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowRight, ChevronDown, FileText, Info, RefreshCw, X } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/card';
@@ -21,6 +21,9 @@ const ExecutionCreate = () => {
   const [stateError, setStateError] = useState('');
   const [stateDropdownOpen, setStateDropdownOpen] = useState(false);
   const stateDropdownRef = useRef(null);
+  const [sourceTypeOptions, setSourceTypeOptions] = useState([]);
+  const [sourceTypesLoading, setSourceTypesLoading] = useState(false);
+  const [sourceTypeError, setSourceTypeError] = useState('');
   const [evidenceTypeOptions, setEvidenceTypeOptions] = useState([]);
   const [evidenceTypesLoading, setEvidenceTypesLoading] = useState(false);
   const [evidenceTypeError, setEvidenceTypeError] = useState('');
@@ -31,13 +34,9 @@ const ExecutionCreate = () => {
   const [executionId, setExecutionId] = useState(executionIdFromUrl || '');
   const [isEditMode, setIsEditMode] = useState(false);
 
-  const allEvidenceTypeKeys = useMemo(
-    () => evidenceTypeOptions.map((evidenceType) => evidenceType.key),
-    [evidenceTypeOptions]
-  );
-
   const [formValues, setFormValues] = useState({
     name: '',
+    selectedTypeKey: '',
     selectedStateNames: [],
     selectedEvidenceTypes: [],
     evidenceThreshold: '',
@@ -45,7 +44,7 @@ const ExecutionCreate = () => {
 
   useEffect(() => {
     void loadStates();
-    void loadEvidenceTypes();
+    void loadSourceTypes();
   }, []);
 
   useEffect(() => {
@@ -55,12 +54,34 @@ const ExecutionCreate = () => {
   }, [executionIdFromUrl]);
 
   useEffect(() => {
+    // New-analysis mode: once source types are known, default to "project_report"
+    // (ENV.DEFAULT_CSV_TYPE_ID) — explicitly, not just whichever item sorts first —
+    // so the default stays the Project workflow even once other workflows exist and
+    // sort earlier alphabetically. Falls back to the first available item only if
+    // project_report itself isn't in the list (shouldn't happen; defensive only).
+    // Skipped in edit mode — loadExecution resolves selectedTypeKey from the execution.
+    if (!executionIdFromUrl && !isEditMode && sourceTypeOptions.length > 0 && !formValues.selectedTypeKey) {
+      const defaultTypeKey =
+        sourceTypeOptions.find((sourceType) => sourceType.typeKey === DEFAULT_CSV_TYPE_ID)?.typeKey
+        || sourceTypeOptions[0].typeKey;
+      setFormValues((current) => ({ ...current, selectedTypeKey: defaultTypeKey, selectedEvidenceTypes: [] }));
+      void loadEvidenceTypes(defaultTypeKey).then((items) => {
+        setFormValues((current) =>
+          current.selectedTypeKey === defaultTypeKey
+            ? { ...current, selectedEvidenceTypes: items.map((item) => item.key) }
+            : current
+        );
+      });
+    }
+  }, [executionIdFromUrl, isEditMode, sourceTypeOptions, formValues.selectedTypeKey]);
+
+  useEffect(() => {
     if (!executionIdFromUrl) {
       setIsEditMode(false);
       setExecutionId('');
-      setFormValues({ name: '', selectedStateNames: [], selectedEvidenceTypes: allEvidenceTypeKeys, evidenceThreshold: '' });
+      setFormValues({ name: '', selectedTypeKey: '', selectedStateNames: [], selectedEvidenceTypes: [], evidenceThreshold: '' });
     }
-  }, [executionIdFromUrl, allEvidenceTypeKeys]);
+  }, [executionIdFromUrl]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -86,11 +107,27 @@ const ExecutionCreate = () => {
     }
   };
 
-  const loadEvidenceTypes = async () => {
+  const loadSourceTypes = async () => {
+    setSourceTypesLoading(true);
+    setSourceTypeError('');
+    try {
+      const items = await configService.listProjectCsvSourceTypes();
+      setSourceTypeOptions(items);
+      return items;
+    } catch (error) {
+      setSourceTypeOptions([]);
+      setSourceTypeError(getApiErrorMessage(error, 'Unable to load analysis workflows. Please try again.'));
+      return [];
+    } finally {
+      setSourceTypesLoading(false);
+    }
+  };
+
+  const loadEvidenceTypes = async (typeKey) => {
     setEvidenceTypesLoading(true);
     setEvidenceTypeError('');
     try {
-      const items = await configService.listEvidenceTypes();
+      const items = await configService.listEvidenceTypes(typeKey);
       setEvidenceTypeOptions(items);
       return items;
     } catch (error) {
@@ -114,15 +151,19 @@ const ExecutionCreate = () => {
         return;
       }
 
-      // Resolve the unrestricted default independently of evidenceTypeOptions state,
-      // which may not have finished loading yet.
-      const knownKeys = evidenceTypeOptions.length > 0 ? evidenceTypeOptions : await loadEvidenceTypes();
+      // Evidence types are scoped to this execution's own csv_type_id (an execution's
+      // workflow is fixed at creation — the backend has no update path for it), not
+      // whatever was loaded for the create-mode default, so always refetch here rather
+      // than reusing evidenceTypeOptions state.
+      const typeKey = execution.csv_type_id || '';
+      const knownKeys = await loadEvidenceTypes(typeKey);
       const allKeys = knownKeys.map((evidenceType) => evidenceType.key);
 
       setIsEditMode(true);
       setExecutionId(id);
       setFormValues({
         name: execution.name || '',
+        selectedTypeKey: typeKey,
         selectedStateNames: Array.isArray(execution.states) ? execution.states : [],
         selectedEvidenceTypes: execution.processing_config?.evidence_types || allKeys,
         evidenceThreshold: execution.threshold_config?.enable_relevant_cap === true
@@ -141,6 +182,20 @@ const ExecutionCreate = () => {
     setGlobalError('');
     setGlobalSuccess('');
     setFormValues((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSourceTypeChange = (event) => {
+    const typeKey = event.target.value;
+    setGlobalError('');
+    setGlobalSuccess('');
+    setFormValues((current) => ({ ...current, selectedTypeKey: typeKey, selectedEvidenceTypes: [] }));
+    void loadEvidenceTypes(typeKey).then((items) => {
+      setFormValues((current) =>
+        current.selectedTypeKey === typeKey
+          ? { ...current, selectedEvidenceTypes: items.map((item) => item.key) }
+          : current
+      );
+    });
   };
 
   const handleStateToggle = (stateName) => {
@@ -168,6 +223,10 @@ const ExecutionCreate = () => {
   const validateCreateForm = () => {
     if (!formValues.name.trim()) {
       setGlobalError('Analysis name is required.');
+      return false;
+    }
+    if (!formValues.selectedTypeKey) {
+      setGlobalError('Please select an analysis workflow.');
       return false;
     }
     if (formValues.selectedStateNames.length === 0) {
@@ -217,16 +276,14 @@ const ExecutionCreate = () => {
         setGlobalSuccess('Analysis updated successfully.');
         return response?.id || executionId;
       } else {
-        // Create new draft — omit evidence_types when unrestricted (all types checked)
-        const evidenceTypes =
-          formValues.selectedEvidenceTypes.length < allEvidenceTypeKeys.length
-            ? formValues.selectedEvidenceTypes
-            : undefined;
+        // Create new draft — evidence_types is always required by the backend
+        // (models/schemas.py ExecutionCreate.evidence_types: Field(..., min_length=1)),
+        // even when every type is checked, so it must always be sent explicitly.
         const response = await executionService.createExecutionDraft({
           name: formValues.name.trim(),
-          csv_type_id: DEFAULT_CSV_TYPE_ID,
+          csv_type_id: formValues.selectedTypeKey || DEFAULT_CSV_TYPE_ID,
           states: formValues.selectedStateNames,
-          evidence_types: evidenceTypes,
+          evidence_types: formValues.selectedEvidenceTypes,
           ...(thresholdValue !== undefined ? { evidence_threshold: thresholdValue } : {}),
         });
         const id = response?.id || '';
@@ -308,6 +365,39 @@ const ExecutionCreate = () => {
                     placeholder="Enter analysis run name"
                     className="border-slate-300 bg-white text-slate-800 hover:border-blue-400 focus:border-blue-500"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="sourceType" className="text-sm font-semibold text-slate-800">
+                    Analysis Workflow
+                  </Label>
+                  <select
+                    id="sourceType"
+                    name="sourceType"
+                    value={formValues.selectedTypeKey}
+                    onChange={handleSourceTypeChange}
+                    disabled={isEditMode || sourceTypesLoading || sourceTypeOptions.length === 0}
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 hover:border-blue-400 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+                  >
+                    {sourceTypesLoading && <option value="">Loading workflows...</option>}
+                    {!sourceTypesLoading && sourceTypeOptions.length === 0 && <option value="">No workflows available</option>}
+                    {sourceTypeOptions.map((sourceType) => (
+                      <option key={sourceType.typeKey} value={sourceType.typeKey}>
+                        {sourceType.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500">
+                    {isEditMode
+                      ? 'The workflow cannot be changed after an analysis is created.'
+                      : 'Determines the expected CSV format and validation rules for this analysis.'}
+                  </p>
+                  {sourceTypeError && (
+                    <p className="flex items-center gap-1 text-xs text-rose-700">
+                      <AlertCircle className="h-3 w-3" />
+                      {sourceTypeError}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">

@@ -99,3 +99,14 @@ export const formatDateTime = (value) => {
     minute: '2-digit',
   });
 };
+
+// The report *view* (aggregated summary/filters) still hardcodes project_report's column
+// names on the backend (services/report_service.py: _compute_report_summary /
+// _compute_filter_options), so it silently shows wrong/empty data for other CSV shapes.
+// CSV *download* is unaffected (fixed separately) and stays enabled everywhere. Remove a
+// type from this list once its report view has been made column-mapping-aware.
+const REPORT_VIEW_UNSUPPORTED_CSV_TYPES = ['observation'];
+
+export const isReportViewSupported = (csvTypeId) => {
+  return !REPORT_VIEW_UNSUPPORTED_CSV_TYPES.includes(csvTypeId);
+};

@@ -493,14 +493,20 @@ export const configService = {
     return items.map((item, index) => normalizeSourceTypeItem(item, index));
   },
 
-  getSampleCsvUrl: async (typeId, fileType) => {
-    const response = await apiClient.get(`/config/csv-source-types/${typeId}/sample/${fileType}`);
+  // typeKey: CsvSourceType.type_key (e.g. "project_report") — same identifier
+  // execution.csv_type_id already carries, no numeric id lookup needed.
+  getSampleCsvUrl: async (typeKey, fileType) => {
+    const response = await apiClient.get(
+      `/config/csv-source-types/${encodeURIComponent(typeKey)}/sample/${fileType}`
+    );
     return response.data;
   },
 
-  listEvidenceTypes: async () => {
+  // typeKey: CsvSourceType.type_key to scope to (a `typeKey` from listProjectCsvSourceTypes()
+  // items) — omitted defaults server-side to "project_report", for backward compatibility.
+  listEvidenceTypes: async (typeKey) => {
     const response = await apiClient.get('/config/list', {
-      params: { type: 'evidence_type' },
+      params: { type: 'evidence_type', ...(typeKey ? { type_key: typeKey } : {}) },
     });
     const items = parseConfigResponse(response.data, 'evidence types');
     return items.map((item, index) => normalizeEvidenceTypeItem(item, index));
