@@ -166,8 +166,8 @@ const ExecutionCreate = () => {
         selectedTypeKey: typeKey,
         selectedStateNames: Array.isArray(execution.states) ? execution.states : [],
         selectedEvidenceTypes: execution.processing_config?.evidence_types || allKeys,
-        evidenceThreshold: execution.threshold_config?.enable_relevant_cap === true
-          ? String(execution.threshold_config.max_relevant_per_user_task ?? '')
+        evidenceThreshold: typeof execution.threshold_config?.max_relevant_per_user_task === 'number'
+          ? String(execution.threshold_config.max_relevant_per_user_task)
           : '',
       });
     } catch (error) {
@@ -239,8 +239,8 @@ const ExecutionCreate = () => {
     }
     if (formValues.evidenceThreshold !== '') {
       const n = Number(formValues.evidenceThreshold);
-      if (!Number.isInteger(n) || n < 1 || n > 100) {
-        setGlobalError('Evidence threshold must be a whole number between 1 and 100.');
+      if (!Number.isInteger(n) || n < 1 || n > 10) {
+        setGlobalError('Evidence threshold must be a whole number between 1 and 10.');
         return false;
       }
     }
@@ -278,7 +278,8 @@ const ExecutionCreate = () => {
       } else {
         // Create new draft — evidence_types is always required by the backend
         // (models/schemas.py ExecutionCreate.evidence_types: Field(..., min_length=1)),
-        // even when every type is checked, so it must always be sent explicitly.
+        // even when every type is checked, so it must always be sent explicitly
+        // (fail loud on a missing filter instead of silently processing every type).
         const response = await executionService.createExecutionDraft({
           name: formValues.name.trim(),
           csv_type_id: formValues.selectedTypeKey || DEFAULT_CSV_TYPE_ID,
@@ -527,7 +528,7 @@ const ExecutionCreate = () => {
                     name="evidenceThreshold"
                     type="number"
                     min={1}
-                    max={100}
+                    max={10}
                     value={formValues.evidenceThreshold}
                     onChange={handleTextChange}
                     placeholder="e.g. 3"

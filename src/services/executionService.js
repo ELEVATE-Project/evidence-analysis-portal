@@ -511,6 +511,23 @@ export const configService = {
     const items = parseConfigResponse(response.data, 'evidence types');
     return items.map((item, index) => normalizeEvidenceTypeItem(item, index));
   },
+
+  getSchoolFilterConfig: async () => {
+    const response = await apiClient.get('/config/list', {
+      params: { type: 'school_filter' },
+    });
+    const items = parseConfigResponse(response.data, 'school filter config');
+    const requiredColumn = items[0]?.required_column;
+    if (typeof requiredColumn !== 'string' || !requiredColumn.trim()) {
+      throw new Error('School filter config did not include a required_column.');
+    }
+    return {
+      requiredColumn: requiredColumn.trim(),
+      // Only true once the tenant's CsvSourceType has a sample school-filter CSV configured
+      // (backend: sample_school_filter_file_url) — gates whether the upload section is shown.
+      enabled: Boolean(items[0]?.school_filter_enabled),
+    };
+  },
 };
 
 export const reportService = {
