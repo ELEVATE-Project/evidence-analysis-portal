@@ -103,10 +103,11 @@ export const formatDateTime = (value) => {
 // The report *view* (aggregated summary/filters) still hardcodes project_report's column
 // names on the backend (services/report_service.py: _compute_report_summary /
 // _compute_filter_options), so it silently shows wrong/empty data for other CSV shapes.
-// CSV *download* is unaffected (fixed separately) and stays enabled everywhere. Remove a
-// type from this list once its report view has been made column-mapping-aware.
-const REPORT_VIEW_UNSUPPORTED_CSV_TYPES = ['observation'];
+// CSV *download* is unaffected (fixed separately) and stays enabled everywhere. Allowlist
+// (not denylist) so a newly configured CSV type defaults to unsupported until its report
+// view has been made column-mapping-aware, instead of silently rendering wrong/empty data.
+const REPORT_VIEW_SUPPORTED_CSV_TYPES = ['project_report'];
 
 export const isReportViewSupported = (csvTypeId) => {
-  return !REPORT_VIEW_UNSUPPORTED_CSV_TYPES.includes(csvTypeId);
+  return REPORT_VIEW_SUPPORTED_CSV_TYPES.includes(csvTypeId);
 };

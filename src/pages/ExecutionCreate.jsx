@@ -27,6 +27,7 @@ const ExecutionCreate = () => {
   const [evidenceTypeOptions, setEvidenceTypeOptions] = useState([]);
   const [evidenceTypesLoading, setEvidenceTypesLoading] = useState(false);
   const [evidenceTypeError, setEvidenceTypeError] = useState('');
+  const evidenceTypesRequestIdRef = useRef(0);
   const [creatingAnalysis, setCreatingAnalysis] = useState(false);
   const [loadingExecution, setLoadingExecution] = useState(false);
   const [globalError, setGlobalError] = useState('');
@@ -124,18 +125,30 @@ const ExecutionCreate = () => {
   };
 
   const loadEvidenceTypes = async (typeKey) => {
+    // Guards against out-of-order responses when the workflow selection changes quickly:
+    // only the most recently issued request is allowed to write evidenceTypeOptions/error/
+    // loading state. The returned `items` is still handed back unguarded to callers, which
+    // already re-check `selectedTypeKey` themselves before applying it (see
+    // handleSourceTypeChange / the auto-select effect below).
+    const requestId = ++evidenceTypesRequestIdRef.current;
     setEvidenceTypesLoading(true);
     setEvidenceTypeError('');
     try {
       const items = await configService.listEvidenceTypes(typeKey);
-      setEvidenceTypeOptions(items);
+      if (evidenceTypesRequestIdRef.current === requestId) {
+        setEvidenceTypeOptions(items);
+      }
       return items;
     } catch (error) {
-      setEvidenceTypeOptions([]);
-      setEvidenceTypeError(getApiErrorMessage(error, 'Unable to load evidence types. Please try again.'));
+      if (evidenceTypesRequestIdRef.current === requestId) {
+        setEvidenceTypeOptions([]);
+        setEvidenceTypeError(getApiErrorMessage(error, 'Unable to load evidence types. Please try again.'));
+      }
       return [];
     } finally {
-      setEvidenceTypesLoading(false);
+      if (evidenceTypesRequestIdRef.current === requestId) {
+        setEvidenceTypesLoading(false);
+      }
     }
   };
 
