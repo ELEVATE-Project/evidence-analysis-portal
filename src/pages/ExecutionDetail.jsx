@@ -157,9 +157,16 @@ const ExecutionDetail = () => {
   }, [loadExecutionView]);
 
   useEffect(() => {
+    // Evidence types are scoped to this execution's own csv_type_id (mirrors
+    // ExecutionCreate.jsx's loadExecution), so wait for the execution to load
+    // rather than fetching the default workflow's options blind.
+    const typeKey = execution?.csv_type_id;
+    if (typeKey === undefined) {
+      return;
+    }
     const loadEvidenceTypeOptions = async () => {
       try {
-        const items = await configService.listEvidenceTypes();
+        const items = await configService.listEvidenceTypes(typeKey || '');
         setEvidenceTypeOptions(items);
       } catch (requestError) {
         // Silent failure; formatEvidenceTypes falls back to raw keys without labels.
@@ -167,7 +174,7 @@ const ExecutionDetail = () => {
       }
     };
     void loadEvidenceTypeOptions();
-  }, []);
+  }, [execution?.csv_type_id]);
 
   useEffect(() => {
     if (!executionId || loading) {
