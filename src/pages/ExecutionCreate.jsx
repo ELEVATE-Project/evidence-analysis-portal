@@ -66,10 +66,10 @@ const ExecutionCreate = () => {
         sourceTypeOptions.find((sourceType) => sourceType.typeKey === DEFAULT_CSV_TYPE_ID)?.typeKey
         || sourceTypeOptions[0].typeKey;
       setFormValues((current) => ({ ...current, selectedTypeKey: defaultTypeKey, selectedEvidenceTypes: [] }));
-      void loadEvidenceTypes(defaultTypeKey).then((items) => {
+      void loadEvidenceTypes(defaultTypeKey).then((evidenceTypeItems) => {
         setFormValues((current) =>
           current.selectedTypeKey === defaultTypeKey
-            ? { ...current, selectedEvidenceTypes: items.map((item) => item.key) }
+            ? { ...current, selectedEvidenceTypes: evidenceTypeItems.map((evidenceType) => evidenceType.key) }
             : current
         );
       });
@@ -117,7 +117,7 @@ const ExecutionCreate = () => {
       return items;
     } catch (error) {
       setSourceTypeOptions([]);
-      setSourceTypeError(getApiErrorMessage(error, 'Unable to load analysis workflows. Please try again.'));
+      setSourceTypeError(getApiErrorMessage(error, 'Unable to load CSV types. Please try again.'));
       return [];
     } finally {
       setSourceTypesLoading(false);
@@ -127,18 +127,25 @@ const ExecutionCreate = () => {
   const loadEvidenceTypes = async (typeKey) => {
     // Guards against out-of-order responses when the workflow selection changes quickly:
     // only the most recently issued request is allowed to write evidenceTypeOptions/error/
-    // loading state. The returned `items` is still handed back unguarded to callers, which
-    // already re-check `selectedTypeKey` themselves before applying it (see
+    // loading state. The returned `evidenceTypeItems` is still handed back unguarded to
+    // callers, which already re-check `selectedTypeKey` themselves before applying it (see
     // handleSourceTypeChange / the auto-select effect below).
     const requestId = ++evidenceTypesRequestIdRef.current;
     setEvidenceTypesLoading(true);
     setEvidenceTypeError('');
     try {
-      const items = await configService.listEvidenceTypes(typeKey);
-      if (evidenceTypesRequestIdRef.current === requestId) {
-        setEvidenceTypeOptions(items);
+      const evidenceTypeItems = await configService.listEvidenceTypes(typeKey);
+      // configService.listEvidenceTypes normalizes its response into an array, but that's
+      // a contract with the service layer, not a language guarantee — validate at this
+      // boundary too so a future change there fails loudly here instead of feeding a
+      // non-array into .map() below and crashing the form.
+      if (!Array.isArray(evidenceTypeItems)) {
+        throw new Error('Evidence types response was not a list.');
       }
-      return items;
+      if (evidenceTypesRequestIdRef.current === requestId) {
+        setEvidenceTypeOptions(evidenceTypeItems);
+      }
+      return evidenceTypeItems;
     } catch (error) {
       if (evidenceTypesRequestIdRef.current === requestId) {
         setEvidenceTypeOptions([]);
@@ -202,10 +209,10 @@ const ExecutionCreate = () => {
     setGlobalError('');
     setGlobalSuccess('');
     setFormValues((current) => ({ ...current, selectedTypeKey: typeKey, selectedEvidenceTypes: [] }));
-    void loadEvidenceTypes(typeKey).then((items) => {
+    void loadEvidenceTypes(typeKey).then((evidenceTypeItems) => {
       setFormValues((current) =>
         current.selectedTypeKey === typeKey
-          ? { ...current, selectedEvidenceTypes: items.map((item) => item.key) }
+          ? { ...current, selectedEvidenceTypes: evidenceTypeItems.map((evidenceType) => evidenceType.key) }
           : current
       );
     });
@@ -239,7 +246,7 @@ const ExecutionCreate = () => {
       return false;
     }
     if (!formValues.selectedTypeKey) {
-      setGlobalError('Please select an analysis workflow.');
+      setGlobalError('Please select a CSV type.');
       return false;
     }
     if (formValues.selectedStateNames.length === 0) {
@@ -383,7 +390,7 @@ const ExecutionCreate = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="sourceType" className="text-sm font-semibold text-slate-800">
-                    Analysis Workflow
+                    CSV Type
                   </Label>
                   <select
                     id="sourceType"
@@ -393,8 +400,8 @@ const ExecutionCreate = () => {
                     disabled={isEditMode || sourceTypesLoading || sourceTypeOptions.length === 0}
                     className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 hover:border-blue-400 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
                   >
-                    {sourceTypesLoading && <option value="">Loading workflows...</option>}
-                    {!sourceTypesLoading && sourceTypeOptions.length === 0 && <option value="">No workflows available</option>}
+                    {sourceTypesLoading && <option value="">Loading CSV types...</option>}
+                    {!sourceTypesLoading && sourceTypeOptions.length === 0 && <option value="">No CSV types available</option>}
                     {sourceTypeOptions.map((sourceType) => (
                       <option key={sourceType.typeKey} value={sourceType.typeKey}>
                         {sourceType.displayName}
@@ -403,7 +410,7 @@ const ExecutionCreate = () => {
                   </select>
                   <p className="text-xs text-slate-500">
                     {isEditMode
-                      ? 'The workflow cannot be changed after an analysis is created.'
+                      ? 'The CSV type cannot be changed after an analysis is created.'
                       : 'Determines the expected CSV format and validation rules for this analysis.'}
                   </p>
                   {sourceTypeError && (

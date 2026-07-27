@@ -455,20 +455,16 @@ const ExecutionList = () => {
 
                               {getAnalysisStatusGroup(analysis.status) === 'completed' && (
                                 <>
-                                  <Button
-                                    type="button"
-                                    className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700 disabled:cursor-not-allowed"
-                                    onClick={() => isReportViewSupported(analysis.csv_type_id) && navigate(`/reports/${analysis.id}`)}
-                                    disabled={!isReportViewSupported(analysis.csv_type_id)}
-                                    title={
-                                      isReportViewSupported(analysis.csv_type_id)
-                                        ? undefined
-                                        : 'Report view is not available yet for this CSV type. Use Download instead.'
-                                    }
-                                  >
-                                    <FileText className="mr-1.5 h-3.5 w-3.5" />
-                                    View Report
-                                  </Button>
+                                  {isReportViewSupported(analysis.csv_type_id) ? (
+                                    <Button
+                                      type="button"
+                                      className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
+                                      onClick={() => navigate(`/reports/${analysis.id}`)}
+                                    >
+                                      <FileText className="mr-1.5 h-3.5 w-3.5" />
+                                      View Report
+                                    </Button>
+                                  ) : null}
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -568,14 +564,16 @@ const ExecutionList = () => {
 
                         {statusGroup === 'completed' && (
                           <>
-                            <Button
-                              type="button"
-                              className="flex-1 min-w-[110px] h-9 bg-blue-600 text-xs text-white hover:bg-blue-700"
-                              onClick={() => navigate(`/reports/${analysis.id}`)}
-                            >
-                              <FileText className="mr-1.5 h-3.5 w-3.5" />
-                              Report
-                            </Button>
+                            {isReportViewSupported(analysis.csv_type_id) ? (
+                              <Button
+                                type="button"
+                                className="flex-1 min-w-[110px] h-9 bg-blue-600 text-xs text-white hover:bg-blue-700"
+                                onClick={() => navigate(`/reports/${analysis.id}`)}
+                              >
+                                <FileText className="mr-1.5 h-3.5 w-3.5" />
+                                Report
+                              </Button>
+                            ) : null}
                             <Button
                               type="button"
                               variant="outline"

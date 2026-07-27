@@ -508,8 +508,14 @@ export const configService = {
     const response = await apiClient.get('/config/list', {
       params: { type: 'evidence_type', ...(typeKey ? { type_key: typeKey } : {}) },
     });
-    const items = parseConfigResponse(response.data, 'evidence types');
-    return items.map((item, index) => normalizeEvidenceTypeItem(item, index));
+    const evidenceTypeItems = parseConfigResponse(response.data, 'evidence types');
+    // parseConfigResponse already guarantees an array, but that's an internal contract
+    // between two functions in this same file — re-checking here means this exported
+    // method's own return contract doesn't silently depend on that staying true.
+    if (!Array.isArray(evidenceTypeItems)) {
+      throw new Error('Evidence types response was not a list.');
+    }
+    return evidenceTypeItems.map((evidenceType, index) => normalizeEvidenceTypeItem(evidenceType, index));
   },
 
   getSchoolFilterConfig: async () => {
