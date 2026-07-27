@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import StandardReportRenderer from '../components/reports/StandardReportRenderer';
 import { getApiErrorMessage, reportService, executionService } from '../services/executionService';
+import { isReportViewSupported } from '../lib/analysis';
 
 const ReportView = () => {
   const { id: executionId } = useParams();
@@ -36,13 +37,22 @@ const ReportView = () => {
 
     const loadInitialData = async () => {
       try {
-        const [executionDetails, pageData] = await Promise.all([
-          executionService.getExecution(executionId),
-          reportService.getReportDataPage(executionId, { page: 1, pageSize: 1000 }),
-        ]);
-
+        const executionDetails = await executionService.getExecution(executionId);
         if (requestId !== requestIdRef.current) return;
         setExecutionName(executionDetails?.name || 'Unnamed Execution');
+
+        // Report view (aggregated summary/filters) still hardcodes project_report's
+        // column names on the backend, so it silently shows wrong/empty data for other
+        // CSV shapes (e.g. observation) — checked here since this route is reachable by
+        // direct URL even though the "View Report" button is disabled for these types.
+        if (!isReportViewSupported(executionDetails?.csv_type_id)) {
+          setReportApiData(null);
+          setError('Report view is not available yet for this CSV type. Use the Download button on the execution page instead.');
+          return;
+        }
+
+        const pageData = await reportService.getReportDataPage(executionId, { page: 1, pageSize: 1000 });
+        if (requestId !== requestIdRef.current) return;
         setReportApiData(pageData);
       } catch (requestError) {
         if (requestId !== requestIdRef.current) return;

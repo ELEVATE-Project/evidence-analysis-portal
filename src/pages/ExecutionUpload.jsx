@@ -233,14 +233,11 @@ const ExecutionUpload = () => {
     setGlobalError('');
 
     try {
-      // Use csvTypeId from execution or fall back to default
-      const typeId = csvTypeId || ENV.DEFAULT_CSV_TYPE_ID;
-      
-      // If typeId is still a string (like 'project_report'), we need the numeric ID
-      // For now, we'll use 1 as the default ID for project_report type
-      const numericTypeId = typeof typeId === 'number' ? typeId : 1;
-      
-      const response = await configService.getSampleCsvUrl(numericTypeId, fileType);
+      // csv_type_id from the loaded execution (its actual workflow), falling back to the
+      // default only if the execution hasn't loaded yet.
+      const typeKey = csvTypeId || ENV.DEFAULT_CSV_TYPE_ID;
+
+      const response = await configService.getSampleCsvUrl(typeKey, fileType);
       
       if (response?.download_url) {
         // Open the signed URL in a new tab to trigger download

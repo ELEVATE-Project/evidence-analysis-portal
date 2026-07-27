@@ -5,7 +5,7 @@ import { entityService, executionService, getApiErrorMessage, reportService } fr
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
+import { formatDateTime, getAnalysisStatusGroup, getAnalysisStatusMeta, isReportViewSupported } from '../lib/analysis';
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
@@ -455,14 +455,16 @@ const ExecutionList = () => {
 
                               {getAnalysisStatusGroup(analysis.status) === 'completed' && (
                                 <>
-                                  <Button
-                                    type="button"
-                                    className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
-                                    onClick={() => navigate(`/reports/${analysis.id}`)}
-                                  >
-                                    <FileText className="mr-1.5 h-3.5 w-3.5" />
-                                    View Report
-                                  </Button>
+                                  {isReportViewSupported(analysis.csv_type_id) ? (
+                                    <Button
+                                      type="button"
+                                      className="h-8 bg-blue-600 px-3 text-xs text-white hover:bg-blue-700"
+                                      onClick={() => navigate(`/reports/${analysis.id}`)}
+                                    >
+                                      <FileText className="mr-1.5 h-3.5 w-3.5" />
+                                      View Report
+                                    </Button>
+                                  ) : null}
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -562,14 +564,16 @@ const ExecutionList = () => {
 
                         {statusGroup === 'completed' && (
                           <>
-                            <Button
-                              type="button"
-                              className="flex-1 min-w-[110px] h-9 bg-blue-600 text-xs text-white hover:bg-blue-700"
-                              onClick={() => navigate(`/reports/${analysis.id}`)}
-                            >
-                              <FileText className="mr-1.5 h-3.5 w-3.5" />
-                              Report
-                            </Button>
+                            {isReportViewSupported(analysis.csv_type_id) ? (
+                              <Button
+                                type="button"
+                                className="flex-1 min-w-[110px] h-9 bg-blue-600 text-xs text-white hover:bg-blue-700"
+                                onClick={() => navigate(`/reports/${analysis.id}`)}
+                              >
+                                <FileText className="mr-1.5 h-3.5 w-3.5" />
+                                Report
+                              </Button>
+                            ) : null}
                             <Button
                               type="button"
                               variant="outline"

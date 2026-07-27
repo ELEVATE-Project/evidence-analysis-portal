@@ -4,7 +4,13 @@ import { Download, FileSearch, FileText, Loader2, Pencil, RefreshCw, RotateCcw }
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { configService, executionService, getApiErrorMessage, reportService } from '../services/executionService';
-import { formatDateTime, formatEvidenceTypes, getAnalysisStatusGroup, getAnalysisStatusMeta } from '../lib/analysis';
+import {
+  formatDateTime,
+  formatEvidenceTypes,
+  getAnalysisStatusGroup,
+  getAnalysisStatusMeta,
+  isReportViewSupported,
+} from '../lib/analysis';
 
 const PREVIEW_LIMIT = 10;
 
@@ -151,17 +157,24 @@ const ExecutionDetail = () => {
   }, [loadExecutionView]);
 
   useEffect(() => {
+    // Evidence types are scoped to this execution's own csv_type_id (mirrors
+    // ExecutionCreate.jsx's loadExecution), so wait for the execution to load
+    // rather than fetching the default workflow's options blind.
+    const typeKey = execution?.csv_type_id;
+    if (typeKey === undefined) {
+      return;
+    }
     const loadEvidenceTypeOptions = async () => {
       try {
-        const items = await configService.listEvidenceTypes();
-        setEvidenceTypeOptions(items);
+        const evidenceTypeItems = await configService.listEvidenceTypes(typeKey || '');
+        setEvidenceTypeOptions(evidenceTypeItems);
       } catch (requestError) {
         // Silent failure; formatEvidenceTypes falls back to raw keys without labels.
         setEvidenceTypeOptions([]);
       }
     };
     void loadEvidenceTypeOptions();
-  }, []);
+  }, [execution?.csv_type_id]);
 
   useEffect(() => {
     if (!executionId || loading) {
@@ -216,6 +229,7 @@ const ExecutionDetail = () => {
   const canViewReport = useMemo(() => {
     return getAnalysisStatusGroup(statusInfo?.status || execution?.status) === 'completed';
   }, [execution?.status, statusInfo?.status]);
+  const reportViewSupported = isReportViewSupported(execution?.csv_type_id);
   const canRerun = useMemo(() => {
     return getAnalysisStatusGroup(statusInfo?.status || execution?.status) === 'failed';
   }, [execution?.status, statusInfo?.status]);
@@ -446,14 +460,16 @@ const ExecutionDetail = () => {
             <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full lg:w-auto lg:justify-end">
               {canViewReport ? (
                 <>
-                  <Button
-                    type="button"
-                    className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
-                    onClick={() => navigate(`/reports/${execution.id}`)}
-                  >
-                    <FileText className="mr-1.5 h-4 w-4" />
-                    View Report
-                  </Button>
+                  {reportViewSupported ? (
+                    <Button
+                      type="button"
+                      className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
+                      onClick={() => navigate(`/reports/${execution.id}`)}
+                    >
+                      <FileText className="mr-1.5 h-4 w-4" />
+                      View Report
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="outline"
