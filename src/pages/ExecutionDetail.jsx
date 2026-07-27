@@ -166,8 +166,8 @@ const ExecutionDetail = () => {
     }
     const loadEvidenceTypeOptions = async () => {
       try {
-        const items = await configService.listEvidenceTypes(typeKey || '');
-        setEvidenceTypeOptions(items);
+        const evidenceTypeItems = await configService.listEvidenceTypes(typeKey || '');
+        setEvidenceTypeOptions(evidenceTypeItems);
       } catch (requestError) {
         // Silent failure; formatEvidenceTypes falls back to raw keys without labels.
         setEvidenceTypeOptions([]);
