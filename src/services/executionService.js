@@ -487,7 +487,7 @@ export const entityService = {
 export const configService = {
   listProjectCsvSourceTypes: async () => {
     const response = await apiClient.get('/config/list', {
-      params: { type: 'project' },
+      params: { type: 'csv_source_type' },
     });
     const items = parseConfigResponse(response.data, 'project CSV source types');
     return items.map((item, index) => normalizeSourceTypeItem(item, index));
