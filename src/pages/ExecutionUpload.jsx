@@ -169,8 +169,13 @@ const ExecutionUpload = () => {
     // back to generic wording rather than asserting a column name that could be wrong
     // for this tenant. `enabled` gates whether the upload section renders at all —
     // false until the tenant has a sample school-filter CSV configured.
+    //
+    // type_key is required server-side for type=school_filter, and must be this
+    // execution's actual csv_type_id (not guessed) — wait for loadExecution above to
+    // set it rather than fetching with a default that could be the wrong type.
+    if (!csvTypeId) return;
     configService
-      .getSchoolFilterConfig()
+      .getSchoolFilterConfig(csvTypeId)
       .then(({ requiredColumn, enabled }) => {
         setSchoolFilterColumnName(requiredColumn);
         setSchoolFilterEnabled(enabled);
@@ -179,7 +184,7 @@ const ExecutionUpload = () => {
         setSchoolFilterColumnName('');
         setSchoolFilterEnabled(false);
       });
-  }, []);
+  }, [csvTypeId]);
 
   const handleFileSelection = (fileType, event) => {
     const selectedFile = event.target.files?.[0] || null;
