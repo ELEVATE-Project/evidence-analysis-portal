@@ -518,9 +518,12 @@ export const configService = {
     return evidenceTypeItems.map((evidenceType, index) => normalizeEvidenceTypeItem(evidenceType, index));
   },
 
-  getSchoolFilterConfig: async () => {
+  // typeKey: CsvSourceType.type_key to scope to — required server-side for
+  // type=school_filter (a request without it now returns 400 rather than silently
+  // resolving to "project_report").
+  getSchoolFilterConfig: async (typeKey) => {
     const response = await apiClient.get('/config/list', {
-      params: { type: 'school_filter' },
+      params: { type: 'school_filter', type_key: typeKey },
     });
     const items = parseConfigResponse(response.data, 'school filter config');
     const requiredColumn = items[0]?.required_column;
