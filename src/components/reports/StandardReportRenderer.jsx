@@ -1268,7 +1268,13 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
       </Card>
 
       <div className="space-y-4 sm:space-y-6" ref={reportRef}>
-        <section className="grid gap-4 md:grid-cols-3">
+        {/* usersCount is 0 (not merely low) exactly when this CSV type has no configured
+            identity column (report_service.py's _resolve_identity_column_for_report) — in
+            that case we cannot tell participants apart, so showing "1 Users with Evidence"
+            would fabricate a fact we don't have. Hide the tile instead of showing a
+            misleading count, and drop to a 2-column grid so the remaining tiles fill the
+            space instead of leaving a gap. */}
+        <section className={`grid gap-4 ${reportData.usersCount > 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
           <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
@@ -1296,20 +1302,22 @@ const StandardReportRenderer = ({ csvText, parsedRows, reportApiData, onFilterCh
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Participation</p>
-                  <p className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-800">{formatNumber(reportData.usersCount)}</p>
-                  <p className="mt-1 text-xs text-slate-600">Users with Evidence</p>
+          {reportData.usersCount > 0 && (
+            <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Participation</p>
+                    <p className="mt-2 text-2xl sm:text-3xl font-semibold text-slate-800">{formatNumber(reportData.usersCount)}</p>
+                    <p className="mt-1 text-xs text-slate-600">Users with Evidence</p>
+                  </div>
+                  <div className="rounded-md border p-2 flex-shrink-0 text-blue-600 bg-blue-50 border-blue-100">
+                    <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </div>
                 </div>
-                <div className="rounded-md border p-2 flex-shrink-0 text-blue-600 bg-blue-50 border-blue-100">
-                  <Users className="h-4 w-4 sm:h-5 sm:w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </section>
 
         <Card className="border-slate-200 shadow-sm">
