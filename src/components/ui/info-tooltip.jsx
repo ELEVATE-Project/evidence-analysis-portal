@@ -22,9 +22,13 @@ const InfoTooltip = React.forwardRef(
       <span
         role="tooltip"
         className={cn(
-          "pointer-events-none invisible absolute z-50 w-80 rounded-md border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100",
-          side === "right" && "left-full top-1/2 ml-2 -translate-y-1/2",
-          side === "bottom" && "left-1/2 top-full mt-2 -translate-x-1/2",
+          "pointer-events-none invisible absolute z-50 w-[calc(100vw-2rem)] rounded-md border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 sm:w-80",
+          // Below `sm:` there isn't reliably room to open beside the icon without
+          // running off a phone-width viewport, so every `side` value opens
+          // centered below the icon on mobile; `side` only takes effect at `sm:`
+          // and up, where a 320px-wide panel actually fits beside the icon.
+          "left-1/2 top-full mt-2 -translate-x-1/2",
+          side === "right" && "sm:left-full sm:top-1/2 sm:ml-2 sm:mt-0 sm:-translate-y-1/2 sm:translate-x-0",
           panelClassName
         )}
       >
