@@ -657,8 +657,9 @@ const ExecutionUpload = () => {
                             label="About extraction fields"
                             content={
                               <p>
-                                Want to extract specific information from the evidence in your report? Define the
-                                values you want the AI to extract. Check the sample CSV for examples.
+                                Want to extract specific information from the evidence in your report — like a
+                                count, a date, or a name? Add the details in the criteria CSV to tell the AI what
+                                to look for. Check the sample CSV for examples of how it&apos;s done.
                               </p>
                             }
                           />
