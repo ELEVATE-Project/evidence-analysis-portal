@@ -5,6 +5,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { InfoTooltip } from '../components/ui/info-tooltip';
 import { executionService, configService, getApiErrorMessage } from '../services/executionService';
 import { ENV } from '../config/env';
 import ExecutionWizardStepper from '../components/executions/ExecutionWizardStepper';
@@ -648,9 +649,21 @@ const ExecutionUpload = () => {
                         <FileText className="h-5 w-5 text-purple-600" />
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="questionsFile" className="text-sm font-semibold text-slate-800">
-                          Criteria CSV
-                        </Label>
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="questionsFile" className="text-sm font-semibold text-slate-800">
+                            Criteria CSV
+                          </Label>
+                          <InfoTooltip
+                            label="About extraction fields"
+                            content={
+                              <p>
+                                Want to extract specific information from the evidence in your report — like a
+                                count, a date, or a name? Add the details in the criteria CSV to tell the AI what
+                                to look for. Check the sample CSV for examples of how it&apos;s done.
+                              </p>
+                            }
+                          />
+                        </div>
                         <div className="flex items-center justify-between">
                           <p className="text-xs text-slate-500">Upload questions/criteria file</p>
                           <Button
