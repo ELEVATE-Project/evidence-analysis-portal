@@ -656,45 +656,10 @@ const ExecutionUpload = () => {
                           <InfoTooltip
                             label="About extraction fields"
                             content={
-                              <div className="space-y-2.5">
-                                <p className="text-[13px] font-semibold text-slate-800">
-                                  Extract extra values from evidence (optional)
-                                </p>
-                                <p>
-                                  Add 3 columns to any row to have the AI also pull out a specific value from that
-                                  row&apos;s evidence — like a count, a name, or a percentage — in addition to
-                                  answering the criteria question.
-                                </p>
-                                <dl className="space-y-1.5 rounded-md bg-slate-50 p-2 border border-slate-100">
-                                  <div>
-                                    <dt className="inline font-semibold text-slate-700">field_name</dt>
-                                    <dd className="inline">
-                                      {' '}— name for the new output column, e.g.{' '}
-                                      <code className="rounded bg-slate-200 px-1 py-0.5 font-mono text-[11px]">Enrollment_2024</code>
-                                    </dd>
-                                  </div>
-                                  <div>
-                                    <dt className="inline font-semibold text-slate-700">field_description</dt>
-                                    <dd className="inline"> — plain-English instructions telling the AI what to find and where to look</dd>
-                                  </div>
-                                  <div>
-                                    <dt className="inline font-semibold text-slate-700">value_type</dt>
-                                    <dd className="inline">
-                                      {' '}— one of{' '}
-                                      <code className="rounded bg-slate-200 px-1 py-0.5 font-mono text-[11px]">int</code>,{' '}
-                                      <code className="rounded bg-slate-200 px-1 py-0.5 font-mono text-[11px]">float</code>, or{' '}
-                                      <code className="rounded bg-slate-200 px-1 py-0.5 font-mono text-[11px]">string</code>
-                                    </dd>
-                                  </div>
-                                </dl>
-                                <p>
-                                  Need more than one value from the same task? Add one row per field, reusing that
-                                  task&apos;s value in the task column. Keep the criteria question on only{' '}
-                                  <strong>one</strong> of those rows (the one asking it, or a separate row) — leave
-                                  criteria blank on the rest. Filling in criteria on more than one row for the same
-                                  task silently keeps only the last one; the others are dropped without a warning.
-                                </p>
-                              </div>
+                              <p>
+                                Want to extract specific information from the evidence in your report? Define the
+                                values you want the AI to extract. Check the sample CSV for examples.
+                              </p>
                             }
                           />
                         </div>
