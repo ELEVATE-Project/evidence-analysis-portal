@@ -222,6 +222,9 @@ const ExecutionDetail = () => {
     return null;
   }, [execution?.processed_rows, execution?.total_rows, statusInfo]);
 
+  const processedRowsCount = statusInfo?.processed_rows ?? execution?.processed_rows;
+  const showProgressBar = typeof processedRowsCount === 'number' && processedRowsCount > 0;
+
   const canEdit = useMemo(() => {
     const normalizedStatus = `${statusInfo?.status || execution?.status || ''}`.toLowerCase();
     return normalizedStatus === 'draft' || normalizedStatus === 'validated';
@@ -564,26 +567,28 @@ const ExecutionDetail = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Progress Section */}
-          <div>
-            <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="font-medium text-slate-700">Processing Progress</span>
-              <span className="font-semibold text-slate-800">{formatPercent(progressPercent)}</span>
+          {showProgressBar && (
+            <div>
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-700">Processing Progress</span>
+                <span className="font-semibold text-slate-800">{formatPercent(progressPercent)}</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                  style={{ width: `${Math.max(0, Math.min(100, progressPercent || 0))}%` }}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+                <span className="font-medium">
+                  <span className="text-blue-600 font-semibold">{formatValue(statusInfo?.processed_rows ?? execution.processed_rows)}</span> processed
+                </span>
+                <span className="font-medium">
+                  <span className="text-blue-600 font-semibold">{formatValue(statusInfo?.total_rows ?? execution.total_rows)}</span> total
+                </span>
+              </div>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-blue-600 transition-all duration-300"
-                style={{ width: `${Math.max(0, Math.min(100, progressPercent || 0))}%` }}
-              />
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
-              <span className="font-medium">
-                <span className="text-blue-600 font-semibold">{formatValue(statusInfo?.processed_rows ?? execution.processed_rows)}</span> processed
-              </span>
-              <span className="font-medium">
-                <span className="text-blue-600 font-semibold">{formatValue(statusInfo?.total_rows ?? execution.total_rows)}</span> total
-              </span>
-            </div>
-          </div>
+          )}
 
           {/* Error Message if any */}
           {(statusInfo?.failure_reason || execution.failure_reason) && (
