@@ -240,7 +240,7 @@ const ExecutionDetail = () => {
   const quickDetails = useMemo(
     () => [
       { label: 'State', value: execution?.states?.join(', ') || null },
-      { label: 'Program', value: execution?.program_name },
+      // { label: 'Program', value: execution?.program_name },
       {
         label: 'Evidence Types',
         value: formatEvidenceTypes(execution?.processing_config?.evidence_types, evidenceTypeOptions) || 'All types',
